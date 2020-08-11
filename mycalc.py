@@ -4,12 +4,9 @@ def plus(a, b):
     return a + b
     
 def minus(a, b):
-<<<<<<< HEAD
     #yg 테스트
     return a - b*2
-=======
-    return a - b
->>>>>>> 69a61727bdb4bf8f2d776452296f543ee103d19c
+
     
 def multi(a, b):
     return a * b
