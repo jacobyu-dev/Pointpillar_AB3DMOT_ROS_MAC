@@ -11,7 +11,8 @@
 - 김해린
 ````
 * 역할: 팀장
-* Email: 
+* Email: lini1634@naver.com
+* https://github.com/seo-dev/KCSY/tree/hrkim/hrkim
 ````
 
 - 조일
