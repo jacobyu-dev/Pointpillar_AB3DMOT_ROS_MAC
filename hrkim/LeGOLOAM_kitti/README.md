@@ -1,4 +1,4 @@
-+ 환경설정 
+## 환경설정 
 
 1. cd ~/catkin_ws/src
 2. git clone https://github.com/RobustFieldAutonomyLab/LeGO-LOAM.git
@@ -28,4 +28,4 @@ TransformToEnd(&surfPointsLessFlat->points[i], &surfPointsLessFlat->points[i]); 
 8. cp -r ~/kitti-lego-loam/LeGO-LOAM/LeGO-LOAM/src ~/catkin_ws/src/LeGO-LOAM/LeGO-LOAM
 
 
-+ 키티 데이타셋 다운받고 로스백으로 바꾸기 
+## 키티 데이타셋 다운받고 로스백으로 바꾸기 
