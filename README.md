@@ -12,8 +12,9 @@
 ````
 * 역할: 팀장
 * Email: lini1634@naver.com
-* https://github.com/seo-dev/KCSY/tree/hrkim/hrkim
 ````
+https://github.com/seo-dev/KCSY/tree/hrkim/hrkim  
+
 
 - 조일
 ````
