@@ -40,7 +40,8 @@ $ unzip 2011_09_26_drive_0002_sync.zip
 $ unzip 2011_09_26_calib.zip  
 $ kitti2bag -t 2011_09_26 -r 0002 raw_synced .  
 
-+ kitti2bag 명령을 찾을 수 없습니다 오류
++ kitti2bag 명령을 찾을 수 없습니다 오류  
+  
 $ pip uninstall kitti2bag  
 $ sudo cp /home/dlonng/.local/bin/kitti2bag /usr/bin/  
 
