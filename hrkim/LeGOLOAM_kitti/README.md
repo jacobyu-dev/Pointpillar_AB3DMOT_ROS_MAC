@@ -34,10 +34,14 @@ TransformToEnd(&surfPointsLessFlat->points[i], &surfPointsLessFlat->points[i]); 
 
 ## 키티 데이타셋 다운받고 로스백으로 바꾸기 
 
-+ http://www.cvlibs.net/datasets/kitti/raw_data.php?type=road 여기서 synced, calibratioin data download
++ http://www.cvlibs.net/datasets/kitti/raw_data.php?type=road 여기서 synced, calibratioin data download  
 
-$ unzip 2011_09_26_drive_0002_sync.zip
-$ unzip 2011_09_26_calib.zip
-$ kitti2bag -t 2011_09_26 -r 0002 raw_synced .
+$ unzip 2011_09_26_drive_0002_sync.zip  
+$ unzip 2011_09_26_calib.zip  
+$ kitti2bag -t 2011_09_26 -r 0002 raw_synced .  
+
++ kitti2bag 명령을 찾을 수 없습니다 오류
+$ pip uninstall kitti2bag  
+$ sudo cp /home/dlonng/.local/bin/kitti2bag /usr/bin/  
 
 > Reference: https://github.com/tomas789/kitti2bag, https://github.com/Mitchell-Lee-93/kitti-lego-loam
