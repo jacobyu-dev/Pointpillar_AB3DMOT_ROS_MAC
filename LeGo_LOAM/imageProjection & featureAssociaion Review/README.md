@@ -1,5 +1,12 @@
 ## 논문 리뷰
 
+> LeGO-LOAM: Lightweight and Ground-Optimized Lidar Odometry and Mapping on Variable Terrain  
+
+요약: 먼저 잡음제거를 위해 포인트 클라우드를 분류한다. 그리고 평면과 에지 특징을 구분하기 위해 특징을 추출한다.  
+연속된 스캔으로 6자유도 변환의 다양한 구성요소를 해결하기 위해 2단계 Levenberg-Marquardt 최적화 방법 후 평면과 에지 특징을 이용한다.  
+LeGO-LOAM은 LOAM과 비슷한 정확도와 더 적은 계산적 비용을 가진다.  
+이동으로 인한 위치추정에러를 제거하기 위해 LeGO-LOAM을 SLAM에 통합했고 KITTI 데이터셋으로 검증되었다.   
+
 ## 코드 리뷰
 
 + imageProjection.cpp
