@@ -70,3 +70,7 @@ runFeatureAssociation()함수는 크게 feature extraction과 feature associatio
 		
 위의 각단계들이 함수로 구현되어있고 아직 정확한 코드 분석은 멀었다
 ```
+
+## 실습
+
+https://github.com/seo-dev/KCSY/tree/hrkim/hrkim/LeGOLOAM_kitti
