@@ -9,7 +9,8 @@
 ```
 ImageProjection이라는 클래스와 메인함수로 이루어져있음.
 
-메인함수에서 ImageProjection클래스를 선언하고, ImageProjection에서 생성자가 실행되는데 utility.h에서 로스백 파일 경로가 적혀진 pointcloudTopi이라는 토픽을 이 노드가 subscribe함.
+메인함수에서 ImageProjection클래스를 선언하고, ImageProjection에서 생성자가 실행되는데 
+utility.h에서 로스백 파일 경로가 적혀진 pointcloudTopi이라는 토픽을 이 노드가 subscribe함.
 Callback함수로 cloudHandler함수를 이용함. 
         
 cloudHandler함수는 7단계로 이루어져있음.
