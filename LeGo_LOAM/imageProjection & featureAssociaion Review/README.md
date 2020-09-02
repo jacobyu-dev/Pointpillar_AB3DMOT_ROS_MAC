@@ -35,3 +35,38 @@ cloudHandler함수는 7단계로 이루어져있음.
 kitti dataset을 적용했을때 차이점은 x,y,z,intensity,ring number가 있는 laserCloudinRing변수를 사용하지 않음.
 링 기능을 사용하지 않는다. 
 ```
+
++ featureAssociation.cpp
+
+> ImageProjection(노드), imu(토픽) -> featureAssociation(노드) -> laser cloud surf/corner last(토픽), outlier cloud last(토픽), laser odom to init(토픽), laser cloud less sharp/flat(토픽), tf
+
+```
+featureAssociation이라는 클래스와 메인함수로 이루어져있음.
+메인함수에서 featureAssociation클래스를 선언하고, ros::ok()동안 runFeatureAssociation()함수를 돌림.
+
+ros::ok() will return false if:
+1. a SIGINT is received (Ctrl-C)
+2. we have been kicked off the network by another node with the same name
+3. ros::shutdown() has been called by another part of the application.
+4. all ros::NodeHandles have been destroyed
+
+runFeatureAssociation()함수는 크게 feature extraction과 feature association 부분으로 나누어져있다. 
+
+1. Feature Extracion
+
+1) imu를 이용한 왜곡보정
+2) segmentedCloudRange로 곡률계산함. (왜지..??)
+3) 가려진 포인트들을 표시함.
+4) surf 방법으로 포인트 특징 추출함 
+5) 시각화를 위한 클라우드 publish ! ! ! 
+
+2. Feature Association
+        
+1) imu 초기 추측 업데이트
+2) 위 업데이트 과정으로 변형된 특징도 업데이트함. 
+3) 회전율 축적하고 imu 회전율도 적용한다.
+4) odometry 를 publish한다. 
+5) map최적화를 위한 클라우드 publish한다. 
+		
+위의 각단계들이 함수로 구현되어있고 아직 정확한 코드 분석은 멀었다
+```
