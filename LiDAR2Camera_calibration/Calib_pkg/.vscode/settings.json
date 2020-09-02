@@ -1,6 +1,0 @@
-{
-    "python.autoComplete.extraPaths": [
-        "/opt/ros/melodic/lib/python2.7/dist-packages"
-    ],
-    "python.pythonPath": "/home/yg-ubuntu1804/anaconda3/envs/test/bin/python"
-}
