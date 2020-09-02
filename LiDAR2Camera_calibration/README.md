@@ -1,6 +1,8 @@
 # Lidar-Camera Projection
 This code is used to explain the post [here](https://medium.com/@daryl.tanyj/camera-lidar-projection-navigating-between-2d-and-3d-911c78167a94).
 
+https://www.notion.so/Camera-Lidar-Projection-Navigating-between-2D-and-3D-by-Daryl-Tan-The-Startup-Medium-229089a5c9b14edcb9ba2f8e5c2a871b
+
 ## Dependency Installation
 Assuming you have installed anaconda. https://www.anaconda.com/distribution/#download-section
 
