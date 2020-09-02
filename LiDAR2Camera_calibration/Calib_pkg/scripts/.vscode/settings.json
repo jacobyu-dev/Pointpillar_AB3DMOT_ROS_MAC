@@ -1,0 +1,8 @@
+{
+    "python.autoComplete.extraPaths": [
+        "/home/user/catkin_ws/devel/lib/python2.7/dist-packages",
+        "/opt/ros/melodic/lib/python2.7/dist-packages"
+    ],
+    "python.linting.enabled": false,
+    "python.pythonPath": "/home/yg-ubuntu1804/anaconda3/envs/ros_env/bin/python"
+}
