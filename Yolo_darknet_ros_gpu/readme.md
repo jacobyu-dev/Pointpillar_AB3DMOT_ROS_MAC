@@ -3,7 +3,7 @@
 참조 : https://m.blog.naver.com/sw4r/221744353526
 https://coding-groot.tistory.com/87
 
-## Settrng
+## Setting
 - Ubuntu 18.04
 - Nvidia geforce 940MX
 - Nvidia graphic driver 450
