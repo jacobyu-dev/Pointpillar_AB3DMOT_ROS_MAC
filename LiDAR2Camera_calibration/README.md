@@ -22,6 +22,8 @@ cd ros_numpy/
 python setup.py install
 ```
 
+https://github.com/tomas789/kitti2bag 에서 만들어진 bag 파일 이용
+
 ```
 roscore
 
