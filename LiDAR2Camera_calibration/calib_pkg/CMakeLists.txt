@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0.2)
-project(Calib_pkg)
+project(calib_pkg)
 
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
