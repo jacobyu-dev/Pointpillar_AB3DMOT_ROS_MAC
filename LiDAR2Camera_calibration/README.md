@@ -28,6 +28,7 @@ python setup.py install
 ```
 
 + kitti dataset 암거나 써도 되는데 아래의 rqt_graph보고 토픽명 맞춰져있는지 확인해야함 (기본 키티 데이터셋은 맞춰져있음)  
+https://github.com/tomas789/kitti2bag 
 ```
 roscore
 
