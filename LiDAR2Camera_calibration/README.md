@@ -19,7 +19,14 @@ conda activate ros_env
 ```
 
 ## How to use
-copy calib_pkg & ros_numpy to catkin_ws
+
++ 이 깃허브 클론 안되어있으면 하고, copy calib_pkg & ros_numpy to catkin_ws  
+
+```
+cp -r ~/KCSY/LiDAR2Camera_calibration/calib_pkg ~/catkin_ws/src
+cp -r ~/KCSY/LiDAR2Camera_calibration/ros_numpy ~/catkin_ws/src
+
+```
 
 + 안하면 ros_numpy 못찾음 
 ```
