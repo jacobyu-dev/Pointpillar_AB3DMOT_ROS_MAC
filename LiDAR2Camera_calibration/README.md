@@ -11,7 +11,6 @@ Assuming you have installed anaconda. https://www.anaconda.com/distribution/#dow
 Get all dependencies with
 
 + 경로 KCSY/LiDAR2Camera_calibration/calib_pkg/ 에서 아래 명령어 실행해야함 !!  
-(requirement.txt 
 
 ```
 conda create -n ros_env --file requirement.txt
@@ -28,6 +27,7 @@ cd ros_numpy/
 python setup.py install
 ```
 
++ kitti dataset 암거나 써도 되는데 아래의 rqt_graph보고 토픽명 맞춰져있는지 확인해야함 (기본 키티 데이터셋은 맞춰져있음)  
 ```
 roscore
 
