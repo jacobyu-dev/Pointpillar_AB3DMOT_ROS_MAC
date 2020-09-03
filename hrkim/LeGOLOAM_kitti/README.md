@@ -6,6 +6,15 @@
 
 ## 환경설정 
 
+```
+wget -O ~/Downloads/gtsam.zip https://github.com/borglab/gtsam/archive/4.0.0-alpha2.zip
+cd ~/Downloads/ && unzip gtsam.zip -d ~/Downloads/
+cd ~/Downloads/gtsam-4.0.0-alpha2/
+mkdir build && cd build
+cmake ..
+sudo make install
+```
+
 1. cd ~/catkin_ws/src
 2. git clone https://github.com/RobustFieldAutonomyLab/LeGO-LOAM.git
 3. cd ~/catkin_ws/src/LeGO-LOAM/LeGO-LOAM/include && vim utility.h
@@ -36,7 +45,7 @@ TransformToEnd(&surfPointsLessFlat->points[i], &surfPointsLessFlat->points[i]); 
 
 7. cd ~/ && git clone https://github.com/Mitchell-Lee-93/kitti-lego-loam.git
 8. cp -r ~/kitti-lego-loam/LeGO-LOAM/LeGO-LOAM/src ~/catkin_ws/src/LeGO-LOAM/LeGO-LOAM
-
+9. cd ~/catkin_ws/ && catkin_make
 
 ## 키티 데이타셋 다운받고 로스백으로 바꾸기 
 
