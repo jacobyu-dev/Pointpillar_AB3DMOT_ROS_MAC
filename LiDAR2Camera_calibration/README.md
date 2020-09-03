@@ -10,7 +10,7 @@ Assuming you have installed anaconda. https://www.anaconda.com/distribution/#dow
 
 Get all dependencies with
 
-+ 경로 KCSY/LiDAR2Camera_calibration/calib_pkg/ 에서 아래 명령어 실행해야함 !!  
++ 경로 KCSY/LiDAR2Camera_calibration/calib_pkg/ 에서 아래 명령어 실행해야함 !!  (requirement.txt
 
 ```
 conda create -n ros_env --file requirement.txt
