@@ -16,6 +16,12 @@ conda activate ros_env
 ## How to use
 copy calib_pkg & ros_numpy to catkin_ws
 
++ 안하면 ros_numpy 못찾음 
+```
+cd ros_numpy/  
+python setup.py install
+```
+
 ```
 roscore
 
