@@ -6,7 +6,12 @@ https://www.notion.so/Camera-Lidar-Projection-Navigating-between-2D-and-3D-by-Da
 ## Dependency Installation
 Assuming you have installed anaconda. https://www.anaconda.com/distribution/#download-section
 
++ 아나콘다 설치 안했으면 https://github.com/seo-dev/KCSY/issues/8 설치하고 오세용  
+
 Get all dependencies with
+
++ 경로 KCSY/LiDAR2Camera_calibration/calib_pkg/ 에서 아래 명령어 실행해야함 !!  
+
 ```
 conda create -n ros_env --file requirement.txt
 
@@ -21,8 +26,6 @@ copy calib_pkg & ros_numpy to catkin_ws
 cd ros_numpy/  
 python setup.py install
 ```
-
-https://github.com/tomas789/kitti2bag 에서 만들어진 bag 파일 이용
 
 ```
 roscore
