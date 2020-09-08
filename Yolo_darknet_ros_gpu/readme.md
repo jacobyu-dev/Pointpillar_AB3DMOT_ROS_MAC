@@ -68,6 +68,8 @@ GPU구동을 위해서 이 세가지의 설치를 확인해주길 바란다. 아
 usb_cam 은 노트북 내장 캡, 외부 usb cam 연결을 위한 패키지이다. 
 참조 : https://m.blog.naver.com/PostView.nhn?blogId=nswve&logNo=221483691234&proxyReferer=https:%2F%2Fwww.google.com%2F
 
+- $ sudo apt install ros-melodic-usb-cam
+
 $ ~/catkin_wd/src/  위치에 설치해준다. (간혹 설치 안된것처럼 보이게 설치되는 경우가 있는데 어어쨋든 rosrun usb_cam usb_cam_node 명령어가 된다면 설치가 된 것이다.)
 실행 명령어는 
 
@@ -75,7 +77,7 @@ $ ~/catkin_wd/src/  위치에 설치해준다. (간혹 설치 안된것처럼 �
 
 **터미널[2] : rosrun usb_cam usb_cam_node**
 
-외부 usb_cam을 사용할 경우 usb_cam_node 를 /dev/video1 으로 수정해주어야한다. (환경마다 지정번호가 다르니 확인해보아야 한다. 대체로 video0 이 노트북내장 웹캠, video1 이 외부usb캠을으로 지정되어있다.)
+외부 usb_cam을 사용할 경우 usb_cam_node 를 /dev/video1 으로 수정해주어야한다. (환경마다 지정번호가 다르니 확인해보아야 한다. 대체로 video0 이 노트북내장 웹캠, video1 이 외부usb캠을으로 지정되어있다.) 
 
 **6. Darknet_ros 설치**
 
@@ -92,6 +94,7 @@ camera_reading의 topic 을 /usb_cam/image_raw 로 수정해준다. (usb_cam을 
 
 **3. ~/catkin_ws/src/darknet_ros/darknet 에서 Makefile 을 수정해준다.**
 ![image](https://user-images.githubusercontent.com/59205405/91964779-8b616480-ed4a-11ea-9c38-beea1038cf1d.png)
+
 GPU=1, OPENCV=1 로 수정해주고 ( GPU를 이용할 것 이기 때문 ), -gencode arch=compute_50,code=[sm_50,compute_50] 을 추가해주었다. (Nvidia geforce 940mx의 compute capability가 5.0 이기 때문에) 본인들의 그래픽카드 환경에 따라 수정해주면 된다.
 
 # 실행
@@ -112,6 +115,7 @@ GPU=1, OPENCV=1 로 수정해주고 ( GPU를 이용할 것 이기 때문 ), -gen
 
 -------------------------------------------------------------------------------------------------------------------------------------
 #  Nvidia Graphic Driver, Cuda Toolkit 10.0, Cudnn 7.5 설치
+
 $ sudo apt update
 
 $ sudo apt install cuda-10-0
