@@ -85,3 +85,24 @@ GPU=1, OPENCV=1 로 수정해주고 ( GPU를 이용할 것 이기 때문 ), -gen
 ![image](https://user-images.githubusercontent.com/59205405/91965438-70dbbb00-ed4b-11ea-823e-4eed7ff852ee.png)
 
 20-30 fps 정도의 성능을 보인다. (cpu만을 사용했을 때는 0.7 fps 정도!! )
+
+-------------------------------------------------------------------------------------------------------------------------------------
+#  Nvidia Graphic Driver, Cuda Toolkit 10.0, Cudnn 7.5 설치
+$ sudo apt update
+
+$ sudo apt install cuda-10-0
+
+$ sudo apt install libcudnn7
+
+$ gedit ~/.bashrc
+- 아래 내용을 ~/.bashrc 맨 밑라인에 추가!!
+
+export PATH=/usr/local/cuda-10.0/bin${PATH:+:${PATH}}
+export LD_LIBRARY_PATH=/usr/local/cuda-10.0/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
+
+
+$ reboot
+
+
+- **nvcc --version** 가 실행된다면 cuda설치가 잘된 것.
+- **cat /usr/local/cuda/include/cudnn.h | grep CUDNN_MAJOR -A 2**  가 실행된다면 cudnn 설치가 잘된 것.
