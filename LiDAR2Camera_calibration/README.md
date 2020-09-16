@@ -6,7 +6,7 @@ https://www.notion.so/Camera-Lidar-Projection-Navigating-between-2D-and-3D-by-Da
 ## Dependency Installation
 Assuming you have installed anaconda. https://www.anaconda.com/distribution/#download-section
 
-+ 아나콘다 설치 안했으면 https://github.com/seo-dev/KCSY/issues/8 설치하고 오세용  
++ 아나콘다 설치 안했으면 https://github.com/seo-dev/KCSY/issues/8 설치
 
 Get all dependencies with
 
