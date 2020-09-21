@@ -1,4 +1,5 @@
 ## Reference: https://github.com/Lukas-Justen/Lane-Marking-Detection  
+## ros workspace: https://github.com/seo-dev/KCSY/tree/hrkim/catkin_ws  
 
 + 0921  
 1. modify kitti2bag file: add seq -> https://github.com/seo-dev/KCSY/issues/9  
