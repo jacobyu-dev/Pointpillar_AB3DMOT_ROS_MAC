@@ -1,52 +1,46 @@
-> https://github.com/willshw/lane-detection
+## Reference: https://github.com/Lukas-Justen/Lane-Marking-Detection  
 
-* AttributeError: module 'pcl' has no attribute 'PointCloud_PointXYZI'  
++ 0921  
+1. modify kitti2bag file: add seq -> https://github.com/seo-dev/KCSY/issues/9  
+2. modify pcl_ld_node.py callback function  
 ```
-pip install python-pcl
+def callback(self, ros_data):
+    header = ros_data.header     
+    frame = header.seq
+
+    pc = pc2.read_points(ros_data,skip_nans=True,field_names=("x","y","z","i"))
+    sys.stdout = open('output_{}.txt'.format(frame),'w')
+
+    for p in pc:
+        print(" ".join(map(str,[p[0], p[1], p[2], p[3]])))
+
+    self.lidar_pub.publish(ros_data)
+  
 ```
-
-* ImportError: libpcl_keypoints.so.1.7: cannot open shared object file: No such file or directory  
-
+3. modify Pointcloud_LaneMarking_Detection.ipynb  
 ```
-Step1: Add Ubuntu 16 source list  
+data=[]
+with open('./output_data_26(0027).txt') as f:
+    line = f.readline()
+    while line:
+        d=line.split()
+        tmp=[]
+        for i in d:
+            tmp.append(float(i))
+        data.append(tmp)
+        line=f.readline()
 
-Step2: sudo apt-get update  
+a=np.array(data)
 
-step3: pip install python-pcl  
-
-step4: sudo apt-get install libpcl-keypoints1.7  
-
-step5: sudo apt-get install libpcl-outofcore1.7  
-
-step6: sudo apt-get install libpcl-people1.7  
-
-step7: sudo apt-get install libpcl-recognition1.7  
-
-step8: sudo apt-get install libpcl-registration1.7  
-
-step9: sudo apt-get install libpcl-segmentation1.7  
-
-step10: sudo apt-get install libpcl-surface1.7  
-
-Now, if you get error "libpng12-0", do this:  
-
-sudo add-apt-repository ppa:linuxuprising/libpng12  
-
-sudo apt update  
-
-sudo apt-get install libpng12-0  
-
-Step11: sudo apt-get install libpcl-tracking1.7  
-
-Step12: sudo apt-get install libflann1.8  
-
-Step13: sudo apt-get install libpcl-visualization1.7  
-
-Step14: python  
-
-import pcl  
-
-Congradulation : pcl successfully is imported  
-
-reference: https://github.com/strawlab/python-pcl/issues/317
+### assumption: There's no void space line in txt file.
+### intensity: 0~255
+pointcloud_df = pd.DataFrame()
+pointcloud_df["Latitude"] = a[:,0]
+pointcloud_df["Longitude"] = a[:,1]
+pointcloud_df["Altitude"] = a[:,2]
+i = a[:,3]*255
+ii=[]
+for x in i:
+    ii.append(int(x))
+pointcloud_df["Intensity"] = ii
 ```
