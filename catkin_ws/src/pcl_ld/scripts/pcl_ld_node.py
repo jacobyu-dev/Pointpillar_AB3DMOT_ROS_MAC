@@ -40,17 +40,20 @@ class lidar_feature:
 
         self.lidar_pub = rospy.Publisher("point_to_rviz", PointCloud2, queue_size=1)
         self.bridge = CvBridge()        
-        self.lidar_sub = rospy.Subscriber("/kitti/velo/pointcloud", PointCloud2, self.callback, queue_size=1)
+        self.lidar_sub = rospy.Subscriber("/kitti/velo/pointcloud", PointCloud2, self.callback, queue_size=80)
         if VERBOSE :
             print "\nsubscribed to /kitti/velo/pointcloud"
            
 
     def callback(self, ros_data):
-        print "\npublish lidar_to_rviz\n\n"
+        header = ros_data.header     
+        frame = header.seq
+
         pc = pc2.read_points(ros_data,skip_nans=True,field_names=("x","y","z","i"))
-        pc_list = []
+        sys.stdout = open('output_{}.txt'.format(frame),'w')
+
         for p in pc:
-            pc_list.append([p[0], p[1], p[2], p[3]])
+            print(" ".join(map(str,[p[0], p[1], p[2], p[3]])))
 
         self.lidar_pub.publish(ros_data)
 
@@ -67,3 +70,6 @@ def main(args):
 
 if __name__ == '__main__':
     main(sys.argv)
+
+
+
