@@ -45,3 +45,23 @@ for x in i:
     ii.append(int(x))
 pointcloud_df["Intensity"] = ii
 ```
+
++ 0922
+
+1. change parameter in Pointcloud_LaneMarking_Detection.ipynb  
+
+```
+def filter_by_mean_value(pointcloud_df):
+    lanes_df = pointcloud_df[pointcloud_df["Intensity"] > mean + 1 * std]
+    lanes_df = lanes_df[lanes_df["Intensity"] < mean +  9 * std ]
+
+```
+```
+db = DBSCAN(eps=0.1, min_samples=40).fit(X)
+#eps: The maximum distance between two samples for one to be considered as in the neighborhood of the other. (default=0.5)
+#min_samplesint: The number of samples (or total weight) in a neighborhood for a point to be considered as a core point.(default=5)
+```
+2. modify pcl_ld_node.py: remove make txt file. It can caculate multiple frames.  
+https://github.com/seo-dev/KCSY/tree/hrkim/catkin_ws/src/pcl_ld/scripts  
+
+> problem: utm conversion takes too long time.  
