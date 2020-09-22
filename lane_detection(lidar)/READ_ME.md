@@ -72,3 +72,7 @@ https://github.com/seo-dev/KCSY/tree/hrkim/catkin_ws/src/pcl_ld/scripts
     + Coordinates are measured in metric units  
 
 > problem: utm conversion takes too long time.  
+> solution:  
+> 1. assumption: There's no difference in langitude, longitude in specific dataset.  
+> 2. extract road point cloud. (no whole frame point cloud)   
+
