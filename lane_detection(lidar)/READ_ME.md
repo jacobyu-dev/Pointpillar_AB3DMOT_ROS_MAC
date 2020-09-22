@@ -1,7 +1,7 @@
 ## Reference: https://github.com/Lukas-Justen/Lane-Marking-Detection  
 ## ros workspace: https://github.com/seo-dev/KCSY/tree/hrkim/catkin_ws  
 
-+ 0921  
+## 0921  
 1. modify kitti2bag file: add seq -> https://github.com/seo-dev/KCSY/issues/9  
 2. modify pcl_ld_node.py callback function  
 ```
@@ -46,7 +46,7 @@ for x in i:
 pointcloud_df["Intensity"] = ii
 ```
 
-+ 0922
+## 0922
 
 1. change parameter in Pointcloud_LaneMarking_Detection.ipynb  
 
@@ -63,5 +63,12 @@ db = DBSCAN(eps=0.1, min_samples=40).fit(X)
 ```
 2. modify pcl_ld_node.py: remove make txt file. It can caculate multiple frames.  
 https://github.com/seo-dev/KCSY/tree/hrkim/catkin_ws/src/pcl_ld/scripts  
+
++ The UTM coordinate system offers the following benefits:  
+    + A square grid    
+                 -> UTM지도의 어느 곳에서나 일정한 거리 관계를 제공합니다.   
+                 -> 위도 및 경도와 같은 각도 좌표계에서 경도가 포함하는 거리는 극점을 향해 이동할 때 달라지며 적도에서 위도에 포함되는 거리와 만 같습니다.  
+    + No negative numbers or East-West designators  
+    + Coordinates are measured in metric units  
 
 > problem: utm conversion takes too long time.  
