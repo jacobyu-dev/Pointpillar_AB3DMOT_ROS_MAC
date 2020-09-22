@@ -1,0 +1,1 @@
+execfile("/home/mds/KCSY/catkin_ws/src/pcl_ld/scripts/test.py")
