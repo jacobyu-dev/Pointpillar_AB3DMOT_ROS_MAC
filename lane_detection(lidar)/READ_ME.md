@@ -78,6 +78,14 @@ https://github.com/seo-dev/KCSY/tree/hrkim/catkin_ws/src/pcl_ld/scripts
 
 ## 0923
 
+*add frame count in call back function   
+```
+global cnt
+print("Finish {} Frame! \n".format(cnt))
+cnt = cnt + 1
+```
+![image](https://user-images.githubusercontent.com/44723287/94008816-9013b880-fdde-11ea-9318-a23476ca21ce.png)
+
 1. assumption: There's no difference in langitude, longitude in specific dataset.   
 + Both polar coordinate and cartesian cooridnate makes wrong information like below picture   
 + Changing dbscan parameter makes no difference.   
