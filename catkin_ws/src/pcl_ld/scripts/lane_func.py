@@ -1,5 +1,7 @@
 import utm
+from numba import jit, cuda 
 
+@jit
 def convert_fuse(pointcloud_df, min_x = 0.0, min_y = 0.0, min_z = 0.0):
     pointcloud_df["Easting"] = pointcloud_df.apply(lambda x: utm.from_latlon(x["Latitude"], x["Longitude"])[0], axis = 1)
     pointcloud_df["Northing"] = pointcloud_df.apply(lambda x: utm.from_latlon(x["Latitude"], x["Longitude"])[1], axis = 1)

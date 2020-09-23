@@ -21,19 +21,73 @@ from sklearn.preprocessing import StandardScaler
 from scipy.spatial.distance import pdist
 from scipy.spatial.distance import squareform
 
-import lane_func
+import utm
+from numba import jit, cuda 
 
+import warnings
+warnings.filterwarnings('ignore')
 VERBOSE=True
+cnt = 1
 
+@jit
+def utm_convert_E(x):
+    return utm.from_latlon(x["Latitude"], x["Longitude"])[0]
+
+@jit
+def utm_convert_N(x):
+    return utm.from_latlon(x["Latitude"], x["Longitude"])[1]
+
+def convert_fuse(pointcloud_df, min_x = 0.0, min_y = 0.0, min_z = 0.0):
+    pointcloud_df["Easting"] = pointcloud_df.apply(utm_convert_E, axis = 1)
+    pointcloud_df["Northing"] = pointcloud_df.apply(utm_convert_N, axis = 1)
+
+
+    
+    min_x = pointcloud_df["Easting"].min()
+    min_y = pointcloud_df["Northing"].min()   
+    min_z = pointcloud_df["Altitude"].min()    
+        
+    utm_coords = utm.from_latlon(pointcloud_df.loc[0,"Latitude"], pointcloud_df.loc[0,"Longitude"])
+
+    zone_number = utm_coords[2]
+    zone_letter = utm_coords[3]
+        
+    # negative to positive ? maybe
+    pointcloud_df["Easting"] = pointcloud_df["Easting"] - min_x    
+    pointcloud_df["Northing"] = pointcloud_df["Northing"] - min_y
+    pointcloud_df["Altitude"] = pointcloud_df["Altitude"] - min_z
+    
+    return pointcloud_df, (min_x, min_y, min_z), (zone_number, zone_letter)
+
+def filter_by_mean_value(pointcloud_df):
+
+    mean = pointcloud_df["Intensity"].mean()
+    std = pointcloud_df["Intensity"].std()
+
+    lanes_df = pointcloud_df[pointcloud_df["Intensity"] > mean + 1 * std]
+    lanes_df = lanes_df[lanes_df["Intensity"] < mean +  9 * std ]
+
+#    print("MEAN FILTER:")
+#    print("============")
+#    print("Intensity - Mean value:      ", mean)
+#    print("Intensity - Std value:       ", std)
+#    print("Intensity - Lower bound:     ", mean + 1 * std)
+#    print("Intensity - Upper bound:     ", mean + 9 * std)
+#    print("Intensity - Filtered points: ", len(lanes_df))
+#    print("Intensity - Original points: ", len(pointcloud_df))
+#    print("Intensity - Reduction to %:  ", len(lanes_df)/len(pointcloud_df))
+    
+    return lanes_df
+    
 class lidar_feature:
 
     def __init__(self):
 
         self.lidar_pub = rospy.Publisher("point_to_rviz", PointCloud2, queue_size=1)
         self.bridge = CvBridge()        
-        self.lidar_sub = rospy.Subscriber("/kitti/velo/pointcloud", PointCloud2, self.callback, queue_size=80)
+        self.lidar_sub = rospy.Subscriber("/kitti/velo/pointcloud", PointCloud2, self.callback, queue_size=500)
         if VERBOSE :
-            print "\nsubscribed to /kitti/velo/pointcloud"
+            print("\nsubscribed to /kitti/velo/pointcloud")
 
     def callback(self, ros_data):
         header = ros_data.header     
@@ -56,25 +110,19 @@ class lidar_feature:
         pointcloud_df["Altitude"] = a[:,2]
         pointcloud_df["Intensity"] = a[:,3]
 
-        pointcloud_df, (min_x, min_y, min_z), (number, letter) = lane_func.convert_fuse(pointcloud_df)
+        pointcloud_df, (min_x, min_y, min_z), (number, letter) = convert_fuse(pointcloud_df)
         
         print("Finish convert coordinates! \n")
-        ## It takes a long time...
-        ## The UTM coordinate system offers the following benefits:
-        ## 1. A square grid -> UTM지도의 어느 곳에서나 일정한 거리 관계를 제공합니다. 
-        ##                  ->위도 및 경도와 같은 각도 좌표계에서 경도가 포함하는 거리는 극점을 향해 이동할 때 달라지며 적도에서 위도에 포함되는 거리와 만 같습니다.
-        ## 2. No negative numbers or East-West designators
-        ## 3. Coordinates are measured in metric units
 
         xyzi_df = pointcloud_df[["Easting", "Northing", "Altitude", "Intensity"]]
         xyzi_df.to_csv("./pointcloud.xyz", sep=" ", header=False, index=False)
 
         lanes_df = xyzi_df.copy()
-        lanes_df = lane_func.filter_by_mean_value(lanes_df)
+        lanes_df = filter_by_mean_value(lanes_df)
         lanes_df[['Easting', 'Northing', 'Altitude', 'Intensity']].to_csv("./filter_mean.xyz", index=False)
 
         print("Finish Filtering! \n")
-
+        
         X = lanes_df[["Easting", "Northing", "Altitude"]].values
         X = StandardScaler().fit_transform(X)
 
@@ -106,14 +154,16 @@ class lidar_feature:
             p2 = sub_cluster_df.iloc[i2]
             lines.append(([p1["Easting"], p2["Easting"]],[p1["Northing"], p2["Northing"]], [p1["Altitude"], p2["Altitude"]]))
                 
-        plt.figure(figsize=(20,10))
-        plt.xlim(-1000, 700000), plt.ylim(0,2000000) ## 
+        #plt.figure(figsize=(20,10))
+        #plt.xlim(-1000, 700000), plt.ylim(0,2000000) ## 
 
-        for l in lines:
-            plt.plot(l[0], l[1], l[2])
+        #for l in lines:
+        #    plt.plot(l[0], l[1], l[2])
             
-        plt.show()
-        print("Finish one Frame! \n")
+        #plt.show()
+        global cnt
+        print("Finish {} Frame! \n".format(cnt))
+        cnt = cnt + 1
         #print("Number of prototype lane markings: ", len(lines))
         
 
