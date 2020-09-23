@@ -78,5 +78,48 @@ https://github.com/seo-dev/KCSY/tree/hrkim/catkin_ws/src/pcl_ld/scripts
 
 ## 0923
 
-+ speed
-+ jsk_rviz
+1. assumption: There's no difference in langitude, longitude in specific dataset.   
++ Both polar coordinate and cartesian cooridnate makes wrong information like below picture   
++ Changing dbscan parameter makes no difference.   
+![image](https://user-images.githubusercontent.com/44723287/94007865-07e0e380-fddd-11ea-9763-a23cec6b7087.png)
+
+2. use gpu computing
++ There's no difference in speed..  
+```
+from numba import jit, cuda 
+
+import warnings
+warnings.filterwarnings('ignore')
+VERBOSE=True
+cnt = 1
+
+@jit
+def utm_convert_E(x):
+    return utm.from_latlon(x["Latitude"], x["Longitude"])[0]
+
+@jit
+def utm_convert_N(x):
+    return utm.from_latlon(x["Latitude"], x["Longitude"])[1]
+
+def convert_fuse(pointcloud_df, min_x = 0.0, min_y = 0.0, min_z = 0.0):
+    pointcloud_df["Easting"] = pointcloud_df.apply(utm_convert_E, axis = 1)
+    pointcloud_df["Northing"] = pointcloud_df.apply(utm_convert_N, axis = 1)
+
+
+    
+    min_x = pointcloud_df["Easting"].min()
+    min_y = pointcloud_df["Northing"].min()   
+    min_z = pointcloud_df["Altitude"].min()    
+        
+    utm_coords = utm.from_latlon(pointcloud_df.loc[0,"Latitude"], pointcloud_df.loc[0,"Longitude"])
+
+    zone_number = utm_coords[2]
+    zone_letter = utm_coords[3]
+        
+    # negative to positive ? maybe
+    pointcloud_df["Easting"] = pointcloud_df["Easting"] - min_x    
+    pointcloud_df["Northing"] = pointcloud_df["Northing"] - min_y
+    pointcloud_df["Altitude"] = pointcloud_df["Altitude"] - min_z
+    
+    return pointcloud_df, (min_x, min_y, min_z), (zone_number, zone_letter)
+ ```
