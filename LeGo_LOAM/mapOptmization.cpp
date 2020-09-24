@@ -60,8 +60,10 @@ private:
     noiseModel::Diagonal::shared_ptr odometryNoise;
     noiseModel::Diagonal::shared_ptr constraintNoise;
 
+    //nh로 노드를 제어할 handler 만들기
     ros::NodeHandle nh;
 
+    //publisher를 통해 pub노드 만들기
     ros::Publisher pubLaserCloudSurround;
     ros::Publisher pubOdomAftMapped;
     ros::Publisher pubKeyPoses;
@@ -71,6 +73,7 @@ private:
     ros::Publisher pubRecentKeyFrames;
     ros::Publisher pubRegisteredCloud;
 
+    //Subscriber를 통해 sub노드 만들기
     ros::Subscriber subLaserCloudCornerLast;
     ros::Subscriber subLaserCloudSurfLast;
     ros::Subscriber subOutlierCloudLast;
@@ -231,16 +234,20 @@ public:
 		parameters.relinearizeSkip = 1;
     	isam = new ISAM2(parameters);
 
+        //publish "aft_mapped_to_init" to transformFusion
+        //publish also key_pose_origin
         pubKeyPoses = nh.advertise<sensor_msgs::PointCloud2>("/key_pose_origin", 2);
         pubLaserCloudSurround = nh.advertise<sensor_msgs::PointCloud2>("/laser_cloud_surround", 2);
         pubOdomAftMapped = nh.advertise<nav_msgs::Odometry> ("/aft_mapped_to_init", 5);
 
+        //subscribe below 4 topic from featureAssociation
         subLaserCloudCornerLast = nh.subscribe<sensor_msgs::PointCloud2>("/laser_cloud_corner_last", 2, &mapOptimization::laserCloudCornerLastHandler, this);
         subLaserCloudSurfLast = nh.subscribe<sensor_msgs::PointCloud2>("/laser_cloud_surf_last", 2, &mapOptimization::laserCloudSurfLastHandler, this);
         subOutlierCloudLast = nh.subscribe<sensor_msgs::PointCloud2>("/outlier_cloud_last", 2, &mapOptimization::laserCloudOutlierLastHandler, this);
         subLaserOdometry = nh.subscribe<nav_msgs::Odometry>("/laser_odom_to_init", 5, &mapOptimization::laserOdometryHandler, this);
         subImu = nh.subscribe<sensor_msgs::Imu> (imuTopic, 50, &mapOptimization::imuHandler, this);
-
+        
+        //publish also registered_cloud
         pubHistoryKeyFrames = nh.advertise<sensor_msgs::PointCloud2>("/history_cloud", 2);
         pubIcpKeyFrames = nh.advertise<sensor_msgs::PointCloud2>("/corrected_cloud", 2);
         pubRecentKeyFrames = nh.advertise<sensor_msgs::PointCloud2>("/recent_cloud", 2);
@@ -274,7 +281,7 @@ public:
         kdtreeHistoryKeyPoses.reset(new pcl::KdTreeFLANN<PointType>());
 
         surroundingKeyPoses.reset(new pcl::PointCloud<PointType>());
-        surroundingKeyPosesDS.reset(new pcl::PointCloud<PointType>());        
+        surroundingKeyPosesDS.reset(new pcl::PointCloud<PointType>());
 
         laserCloudCornerLast.reset(new pcl::PointCloud<PointType>()); // corner feature set from odoOptimization
         laserCloudSurfLast.reset(new pcl::PointCloud<PointType>()); // surf feature set from odoOptimization
@@ -364,7 +371,7 @@ public:
         laserCloudSurfFromMapDSNum = 0;
         laserCloudCornerLastDSNum = 0;
         laserCloudSurfLastDSNum = 0;
-        laserCloudOutlierLastDSNum = 0;
+        laserCloudOutlierLastDSNum = 0; 
         laserCloudSurfTotalLastDSNum = 0;
 
         potentialLoopFlag = false;
@@ -373,8 +380,10 @@ public:
         latestFrameID = 0;
     }
 
+    //next coordinate of the world coordinate system 으로 이동
+    //transformTobeMapped 구하는 함수(transformTobeMapped[0][1][2]는 imu에 쓰이고 [3][4][5]는 tX tY tZ에 쓰인다)
     void transformAssociateToMap()
-    {
+    { 
         float x1 = cos(transformSum[1]) * (transformBefMapped[3] - transformSum[3]) 
                  - sin(transformSum[1]) * (transformBefMapped[5] - transformSum[5]);
         float y1 = transformBefMapped[4] - transformSum[4];
@@ -396,6 +405,7 @@ public:
         float sbcz = sin(transformSum[2]);
         float cbcz = cos(transformSum[2]);
 
+    
         float sblx = sin(transformBefMapped[0]);
         float cblx = cos(transformBefMapped[0]);
         float sbly = sin(transformBefMapped[1]);
@@ -403,6 +413,7 @@ public:
         float sblz = sin(transformBefMapped[2]);
         float cblz = cos(transformBefMapped[2]);
 
+        
         float salx = sin(transformAftMapped[0]);
         float calx = cos(transformAftMapped[0]);
         float saly = sin(transformAftMapped[1]);
@@ -410,13 +421,14 @@ public:
         float salz = sin(transformAftMapped[2]);
         float calz = cos(transformAftMapped[2]);
 
+        
         float srx = -sbcx*(salx*sblx + calx*cblx*salz*sblz + calx*calz*cblx*cblz)
                   - cbcx*sbcy*(calx*calz*(cbly*sblz - cblz*sblx*sbly)
                   - calx*salz*(cbly*cblz + sblx*sbly*sblz) + cblx*salx*sbly)
                   - cbcx*cbcy*(calx*salz*(cblz*sbly - cbly*sblx*sblz) 
                   - calx*calz*(sbly*sblz + cbly*cblz*sblx) + cblx*cbly*salx);
         transformTobeMapped[0] = -asin(srx);
-
+        
         float srycrx = sbcx*(cblx*cblz*(caly*salz - calz*salx*saly)
                      - cblx*sblz*(caly*calz + salx*saly*salz) + calx*saly*sblx)
                      - cbcx*cbcy*((caly*calz + salx*saly*salz)*(cblz*sbly - cbly*sblx*sblz)
@@ -444,7 +456,7 @@ public:
                      + cbcx*cbcz*(salx*sblx + calx*cblx*salz*sblz + calx*calz*cblx*cblz);
         transformTobeMapped[2] = atan2(srzcrx / cos(transformTobeMapped[0]), 
                                        crzcrx / cos(transformTobeMapped[0]));
-
+        
         x1 = cos(transformTobeMapped[2]) * transformIncre[3] - sin(transformTobeMapped[2]) * transformIncre[4];
         y1 = sin(transformTobeMapped[2]) * transformIncre[3] + cos(transformTobeMapped[2]) * transformIncre[4];
         z1 = transformIncre[5];
@@ -458,6 +470,8 @@ public:
         transformTobeMapped[4] = transformAftMapped[4] - y2;
         transformTobeMapped[5] = transformAftMapped[5] 
                                - (-sin(transformTobeMapped[1]) * x2 + cos(transformTobeMapped[1]) * z2);
+        //printf("transformTobeMapped[3] =%f, transformTobeMapped[4] =%f, transformTobeMapped[5] =%f\n", transformTobeMapped[3], transformTobeMapped[4], transformTobeMapped[5]);
+        //transformTobeMapped[0][1][2]는 imu에 쓰이고 [3][4][5]는 tX tY tZ에 쓰인다
     }
 
     void transformUpdate()
@@ -487,7 +501,7 @@ public:
 
 		    transformTobeMapped[0] = 0.998 * transformTobeMapped[0] + 0.002 * imuPitchLast;
 		    transformTobeMapped[2] = 0.998 * transformTobeMapped[2] + 0.002 * imuRollLast;
-		  }
+	    }
 
 		for (int i = 0; i < 6; i++) {
 		    transformBefMapped[i] = transformSum[i];
@@ -495,6 +509,7 @@ public:
 		}
     }
 
+    //transformTobemapped data로 roll, pitch, yaw, XYZ 추출
     void updatePointAssociateToMapSinCos(){
         cRoll = cos(transformTobeMapped[0]);
         sRoll = sin(transformTobeMapped[0]);
@@ -510,6 +525,7 @@ public:
         tZ = transformTobeMapped[5];
     }
 
+    //
     void pointAssociateToMap(PointType const * const pi, PointType * const po)
     {
         float x1 = cYaw * pi->x - sYaw * pi->y;
@@ -573,7 +589,7 @@ public:
         }
         return cloudOut;
     }
-
+    //가ㅇ체 변환
     pcl::PointCloud<PointType>::Ptr transformPointCloud(pcl::PointCloud<PointType>::Ptr cloudIn, PointTypePose* transformIn){
 
         pcl::PointCloud<PointType>::Ptr cloudOut(new pcl::PointCloud<PointType>());
@@ -621,7 +637,13 @@ public:
 
     void laserCloudSurfLastHandler(const sensor_msgs::PointCloud2ConstPtr& msg){
         timeLaserCloudSurfLast = msg->header.stamp.toSec();
+        //clear() 문자를 비워주는 함수
         laserCloudSurfLast->clear();
+        /*
+        sensor_msgs::PointCloud2를 subscribe하여 받아서 이것을 pcl::PointCloud형으로 변환하려면
+        pcl::fromROSMsg 함수를 이용한다.
+        https://ahshinyong.tistory.com/m/45
+        */
         pcl::fromROSMsg(*msg, *laserCloudSurfLast);
         newLaserCloudSurfLast = true;
     }
@@ -629,7 +651,9 @@ public:
     void laserOdometryHandler(const nav_msgs::Odometry::ConstPtr& laserOdometry){
         timeLaserOdometry = laserOdometry->header.stamp.toSec();
         double roll, pitch, yaw;
+        //laserOdometry로 부터 geoQuat에 x,y,z,w 받음
         geometry_msgs::Quaternion geoQuat = laserOdometry->pose.pose.orientation;
+        //XYZ축에 고정된 roll pitch yaw값을 matrix로 표현
         tf::Matrix3x3(tf::Quaternion(geoQuat.z, -geoQuat.x, -geoQuat.y, geoQuat.w)).getRPY(roll, pitch, yaw);
         transformSum[0] = -pitch;
         transformSum[1] = -yaw;
@@ -650,9 +674,9 @@ public:
         imuRoll[imuPointerLast] = roll;
         imuPitch[imuPointerLast] = pitch;
     }
-
+    //quaternion 변환 후 odometry, transform update
     void publishTF(){
-
+        //imu 가ㅄ으로 quaternion msg 생성
         geometry_msgs::Quaternion geoQuat = tf::createQuaternionMsgFromRollPitchYaw
                                   (transformAftMapped[2], -transformAftMapped[0], -transformAftMapped[1]);
 
@@ -673,8 +697,11 @@ public:
         pubOdomAftMapped.publish(odomAftMapped);
 
         aftMappedTrans.stamp_ = ros::Time().fromSec(timeLaserOdometry);
+        //setRotation : 회전 정보 저장
         aftMappedTrans.setRotation(tf::Quaternion(-geoQuat.y, -geoQuat.z, geoQuat.x, geoQuat.w));
+        //setOrigin : 이동 정보 저장
         aftMappedTrans.setOrigin(tf::Vector3(transformAftMapped[3], transformAftMapped[4], transformAftMapped[5]));
+        //StampedTransform을 보냄. 이 data에는 frame_id, time, parent_id가 포함되어 있음.
         tfBroadcaster.sendTransform(aftMappedTrans);
     }
 
@@ -800,19 +827,27 @@ public:
     }
 
     void loopClosureThread(){
-
-        if (loopClosureEnableFlag == false)
+        //loop가 닫혔으면 함수 끝
+        //printf("loopClosureThread function\n");
+        if (loopClosureEnableFlag == false){
+            //printf("loopClosureThread function flag false\n");
             return;
+        }
+        //아니라면 performloopclosure 계속 수행
 
+        //rate.sleep(); 과 관련 있음 1초에 1번 내보내겠다라는 뜻
         ros::Rate rate(1);
-        while (ros::ok()){
+
+        while (ros::ok()){//시스템 종료 있을때까지 반복
             rate.sleep();
+            
             performLoopClosure();
         }
     }
 
+    //loop가 닫혔는지 검사
     bool detectLoopClosure(){
-
+        //printf("detectLoopClosure function\n");
         latestSurfKeyFrameCloud->clear();
         nearHistorySurfKeyFrameCloud->clear();
         nearHistorySurfKeyFrameCloudDS->clear();
@@ -822,21 +857,24 @@ public:
         std::vector<int> pointSearchIndLoop;
         std::vector<float> pointSearchSqDisLoop;
         kdtreeHistoryKeyPoses->setInputCloud(cloudKeyPoses3D);
+        //주어진 원반경 안에 궁금한점들의 주변 모든 점들을 탐색
+        //(궁금한 점, 반경, 결과 주변 점 인덱스들, 결과 주변점들의 squared distances, 0이면 주변점들 리턴)
         kdtreeHistoryKeyPoses->radiusSearch(currentRobotPosPoint, historyKeyframeSearchRadius, pointSearchIndLoop, pointSearchSqDisLoop, 0);
         
         closestHistoryFrameID = -1;
-        for (int i = 0; i < pointSearchIndLoop.size(); ++i){
+        for (int i = 0; i < pointSearchIndLoop.size(); ++i){//궁금한 점의 반경 7안의 점들 만큼 반복
             int id = pointSearchIndLoop[i];
-            if (abs(cloudKeyPoses6D->points[id].time - timeLaserOdometry) > 30.0){
+            if (abs(cloudKeyPoses6D->points[id].time - timeLaserOdometry) > 30.0){//laserOdometry와 시간 차가 30 이상이라면
                 closestHistoryFrameID = id;
                 break;
             }
         }
-        if (closestHistoryFrameID == -1){
+        if (closestHistoryFrameID == -1){//detect실패
             return false;
         }
         // save latest key frames
         latestFrameIDLoopCloure = cloudKeyPoses3D->points.size() - 1;
+        //가ㅇ체 변환
         *latestSurfKeyFrameCloud += *transformPointCloud(cornerCloudKeyFrames[latestFrameIDLoopCloure], &cloudKeyPoses6D->points[latestFrameIDLoopCloure]);
         *latestSurfKeyFrameCloud += *transformPointCloud(surfCloudKeyFrames[latestFrameIDLoopCloure],   &cloudKeyPoses6D->points[latestFrameIDLoopCloure]);
 
@@ -850,9 +888,10 @@ public:
         latestSurfKeyFrameCloud->clear();
         *latestSurfKeyFrameCloud = *hahaCloud;
 	   // save history near key frames
-        for (int j = -historyKeyframeSearchNum; j <= historyKeyframeSearchNum; ++j){
+        for (int j = -historyKeyframeSearchNum; j <= historyKeyframeSearchNum; ++j){//historyKeyframeSearchNum=25
             if (closestHistoryFrameID + j < 0 || closestHistoryFrameID + j > latestFrameIDLoopCloure)
                 continue;
+            //가ㅇ체 변환
             *nearHistorySurfKeyFrameCloud += *transformPointCloud(cornerCloudKeyFrames[closestHistoryFrameID+j], &cloudKeyPoses6D->points[closestHistoryFrameID+j]);
             *nearHistorySurfKeyFrameCloud += *transformPointCloud(surfCloudKeyFrames[closestHistoryFrameID+j],   &cloudKeyPoses6D->points[closestHistoryFrameID+j]);
         }
@@ -871,15 +910,16 @@ public:
         return true;
     }
 
-
+    //loopclosure 수행
     void performLoopClosure(){
-
+        //printf("performLoopClosure function start\n");
         if (cloudKeyPoses3D->points.empty() == true)
             return;
         // try to find close key frame if there are any
         if (potentialLoopFlag == false){
-
+            //loop가 close 되어있는지 detect
             if (detectLoopClosure() == true){
+                //printf("detect true@@@@@@@@@@@@@@@@@@@@\n");
                 potentialLoopFlag = true; // find some key frames that is old enough or close enough for loop closure
                 timeSaveFirstCurrentScanForLoopClosure = timeLaserOdometry;
             }
@@ -894,11 +934,14 @@ public:
         icp.setMaximumIterations(100);
         icp.setTransformationEpsilon(1e-6);
         icp.setEuclideanFitnessEpsilon(1e-6);
+        //RANSAC 실행
         icp.setRANSACIterations(0);
-        // Align clouds
+        //icp를 이용해서 alignment 반복
+        //아래 2줄 회전행렬 계산
         icp.setInputSource(latestSurfKeyFrameCloud);
         icp.setInputTarget(nearHistorySurfKeyFrameCloudDS);
         pcl::PointCloud<PointType>::Ptr unused_result(new pcl::PointCloud<PointType>());
+        //icp is aligned
         icp.align(*unused_result);
 
         if (icp.hasConverged() == false || icp.getFitnessScore() > historyKeyframeFitnessScore)
@@ -919,6 +962,7 @@ public:
         float x, y, z, roll, pitch, yaw;
         Eigen::Affine3f correctionCameraFrame;
         correctionCameraFrame = icp.getFinalTransformation(); // get transformation in camera frame (because points are in camera frame)
+        //translation and rotation angle 얻기
         pcl::getTranslationAndEulerAngles(correctionCameraFrame, x, y, z, roll, pitch, yaw);
         Eigen::Affine3f correctionLidarFrame = pcl::getTransformation(z, x, y, yaw, roll, pitch);
         // transform from world origin to wrong pose
@@ -954,13 +998,14 @@ public:
     }
 
     void extractSurroundingKeyFrames(){
-
+        //없으면 함수 종료
         if (cloudKeyPoses3D->points.empty() == true)
             return;	
 		
-    	if (loopClosureEnableFlag == true){
+    	if (loopClosureEnableFlag == true){//초기 false
     	    // only use recent key poses for graph building
-                if (recentCornerCloudKeyFrames.size() < surroundingKeyframeSearchNum){ // queue is not full (the beginning of mapping or a loop is just closed)
+                // queue is not full (the beginning of mapping or a loop is just closed), surroundingKeyframeSearchNum=50
+                if (recentCornerCloudKeyFrames.size() < surroundingKeyframeSearchNum){ 
                     // clear recent key frames queue
                     recentCornerCloudKeyFrames. clear();
                     recentSurfCloudKeyFrames.   clear();
@@ -994,17 +1039,21 @@ public:
                 }
 
                 for (int i = 0; i < recentCornerCloudKeyFrames.size(); ++i){
+                    //corner와 surf의 downsizefilter에 쓰임
                     *laserCloudCornerFromMap += *recentCornerCloudKeyFrames[i];
                     *laserCloudSurfFromMap   += *recentSurfCloudKeyFrames[i];
                     *laserCloudSurfFromMap   += *recentOutlierCloudKeyFrames[i];
                 }
-    	}else{
+    	}else{//loopClosureEnableFlag == false
             surroundingKeyPoses->clear();
             surroundingKeyPosesDS->clear();
     	    // extract all the nearby key poses and downsample them
-    	    kdtreeSurroundingKeyPoses->setInputCloud(cloudKeyPoses3D);
+    	    kdtreeSurroundingKeyPoses->setInputCloud(cloudKeyPoses3D);//input data로 pointer 제공
+            //주어진 원반경 안에 궁금한점들의 주변 모든 점들을 탐색
+            //(궁금한 점, 반경, 결과 주변 점 인덱스들, 결과 주변점들의 squared distances, 0이면 주변점들 리턴)
     	    kdtreeSurroundingKeyPoses->radiusSearch(currentRobotPosPoint, (double)surroundingKeyframeSearchRadius, pointSearchInd, pointSearchSqDis, 0);
-    	    for (int i = 0; i < pointSearchInd.size(); ++i)
+    	    
+            for (int i = 0; i < pointSearchInd.size(); ++i)
                 surroundingKeyPoses->points.push_back(cloudKeyPoses3D->points[pointSearchInd[i]]);
     	    downSizeFilterSurroundingKeyPoses.setInputCloud(surroundingKeyPoses);
     	    downSizeFilterSurroundingKeyPoses.filter(*surroundingKeyPosesDS);
@@ -1047,7 +1096,7 @@ public:
                     surroundingOutlierCloudKeyFrames.push_back(transformPointCloud(outlierCloudKeyFrames[thisKeyInd]));
                 }
             }
-
+            //add new key frames 후 다시 누적
             for (int i = 0; i < surroundingExistingKeyPosesID.size(); ++i) {
                 *laserCloudCornerFromMap += *surroundingCornerCloudKeyFrames[i];
                 *laserCloudSurfFromMap   += *surroundingSurfCloudKeyFrames[i];
@@ -1066,21 +1115,26 @@ public:
 
     void downsampleCurrentScan(){
 
+        //laserCloudCornerLast -> laserCloudCornerLastDS
         laserCloudCornerLastDS->clear();
         downSizeFilterCorner.setInputCloud(laserCloudCornerLast);
         downSizeFilterCorner.filter(*laserCloudCornerLastDS);
         laserCloudCornerLastDSNum = laserCloudCornerLastDS->points.size();
 
+        //laserCloudSurfLast -> laserCloudSurfLastDS
         laserCloudSurfLastDS->clear();
         downSizeFilterSurf.setInputCloud(laserCloudSurfLast);
         downSizeFilterSurf.filter(*laserCloudSurfLastDS);
         laserCloudSurfLastDSNum = laserCloudSurfLastDS->points.size();
 
+        //laserCloudOutlierLast -> laserCloudOutlierLastDS
         laserCloudOutlierLastDS->clear();
         downSizeFilterOutlier.setInputCloud(laserCloudOutlierLast);
         downSizeFilterOutlier.filter(*laserCloudOutlierLastDS);
         laserCloudOutlierLastDSNum = laserCloudOutlierLastDS->points.size();
 
+        //laserCloudSurfLastDS+laserCloudOutlierLastDS=laserCloudSurfTotalLast
+        //laserCloudSurfTotalLast -> laserCloudSurfTotalLastDS
         laserCloudSurfTotalLast->clear();
         laserCloudSurfTotalLastDS->clear();
         *laserCloudSurfTotalLast += *laserCloudSurfLastDS;
@@ -1090,15 +1144,16 @@ public:
         laserCloudSurfTotalLastDSNum = laserCloudSurfTotalLastDS->points.size();
     }
 
+    //cornerOptimization
     void cornerOptimization(int iterCount){
-
         updatePointAssociateToMapSinCos();
         for (int i = 0; i < laserCloudCornerLastDSNum; i++) {
             pointOri = laserCloudCornerLastDS->points[i];
             pointAssociateToMap(&pointOri, &pointSel);
+            //pointsel에서 궁금한점 5개 pointSearchInd에 저장, 거리는 pointSearchSqDis
             kdtreeCornerFromMap->nearestKSearch(pointSel, 5, pointSearchInd, pointSearchSqDis);
             
-            if (pointSearchSqDis[4] < 1.0) {
+            if (pointSearchSqDis[4] < 1.0) {//제일 먼 점의 거리가 1.0 미만이라면
                 float cx = 0, cy = 0, cz = 0;
                 for (int j = 0; j < 5; j++) {
                     cx += laserCloudCornerFromMapDS->points[pointSearchInd[j]].x;
@@ -1123,7 +1178,7 @@ public:
                 matA1.at<float>(1, 0) = a12; matA1.at<float>(1, 1) = a22; matA1.at<float>(1, 2) = a23;
                 matA1.at<float>(2, 0) = a13; matA1.at<float>(2, 1) = a23; matA1.at<float>(2, 2) = a33;
 
-                cv::eigen(matA1, matD1, matV1);
+                cv::eigen(matA1, matD1, matV1);//matA1를 가지고 matD1, matV1을 만드는것 같음
 
                 if (matD1.at<float>(0, 0) > 3 * matD1.at<float>(0, 1)) {
 
@@ -1173,6 +1228,7 @@ public:
         }
     }
 
+    //surfOptimization
     void surfOptimization(int iterCount){
         updatePointAssociateToMapSinCos();
         for (int i = 0; i < laserCloudSurfTotalLastDSNum; i++) {
@@ -1186,7 +1242,7 @@ public:
                     matA0.at<float>(j, 1) = laserCloudSurfFromMapDS->points[pointSearchInd[j]].y;
                     matA0.at<float>(j, 2) = laserCloudSurfFromMapDS->points[pointSearchInd[j]].z;
                 }
-                cv::solve(matA0, matB0, matX0, cv::DECOMP_QR);
+                cv::solve(matA0, matB0, matX0, cv::DECOMP_QR);//solve 또한 알아볼 것 
 
                 float pa = matX0.at<float>(0, 0);
                 float pb = matX0.at<float>(1, 0);
@@ -1226,6 +1282,7 @@ public:
         }
     }
 
+    //LMOptimization
     bool LMOptimization(int iterCount){
         float srx = sin(transformTobeMapped[0]);
         float crx = cos(transformTobeMapped[0]);
@@ -1327,17 +1384,16 @@ public:
     }
 
     void scan2MapOptimization(){
-
+        //Downsize한 corner와 surf의 keyframe갯수(?)가 각 10개 이상 100개 이상이면
         if (laserCloudCornerFromMapDSNum > 10 && laserCloudSurfFromMapDSNum > 100) {
 
             kdtreeCornerFromMap->setInputCloud(laserCloudCornerFromMapDS);
             kdtreeSurfFromMap->setInputCloud(laserCloudSurfFromMapDS);
 
             for (int iterCount = 0; iterCount < 10; iterCount++) {
-
                 laserCloudOri->clear();
                 coeffSel->clear();
-
+        //3 key function(cornerOptimization, surfOptimization, LMOptimization) 
                 cornerOptimization(iterCount);
                 surfOptimization(iterCount);
 
@@ -1349,7 +1405,7 @@ public:
         }
     }
 
-
+    //save key frames and optimized functionality
     void saveKeyFramesAndFactor(){
 
         currentRobotPosPoint.x = transformAftMapped[3];
@@ -1357,6 +1413,7 @@ public:
         currentRobotPosPoint.z = transformAftMapped[5];
 
         bool saveThisKeyFrame = true;
+        //이동거리가 짧으면 false
         if (sqrt((previousRobotPosPoint.x-currentRobotPosPoint.x)*(previousRobotPosPoint.x-currentRobotPosPoint.x)
                 +(previousRobotPosPoint.y-currentRobotPosPoint.y)*(previousRobotPosPoint.y-currentRobotPosPoint.y)
                 +(previousRobotPosPoint.z-currentRobotPosPoint.z)*(previousRobotPosPoint.z-currentRobotPosPoint.z)) < 0.3){
@@ -1370,9 +1427,9 @@ public:
 
         previousRobotPosPoint = currentRobotPosPoint;
         /**
-         * update grsam graph
+         * update gtsam graph
          */
-        if (cloudKeyPoses3D->points.empty()){
+        if (cloudKeyPoses3D->points.empty()){//비었을 때 gtSAMgraph, initialEstimate 업데이트
             gtSAMgraph.add(PriorFactor<Pose3>(0, Pose3(Rot3::RzRyRx(transformTobeMapped[2], transformTobeMapped[0], transformTobeMapped[1]),
                                                        		 Point3(transformTobeMapped[5], transformTobeMapped[3], transformTobeMapped[4])), priorNoise));
             initialEstimate.insert(0, Pose3(Rot3::RzRyRx(transformTobeMapped[2], transformTobeMapped[0], transformTobeMapped[1]),
@@ -1380,7 +1437,7 @@ public:
             for (int i = 0; i < 6; ++i)
             	transformLast[i] = transformTobeMapped[i];
         }
-        else{
+        else{//처음이 아닐 때 gtSAMgraph, initialEstimate 업데이트
             gtsam::Pose3 poseFrom = Pose3(Rot3::RzRyRx(transformLast[2], transformLast[0], transformLast[1]),
                                                 Point3(transformLast[5], transformLast[3], transformLast[4]));
             gtsam::Pose3 poseTo   = Pose3(Rot3::RzRyRx(transformAftMapped[2], transformAftMapped[0], transformAftMapped[1]),
@@ -1453,6 +1510,7 @@ public:
         outlierCloudKeyFrames.push_back(thisOutlierKeyFrame);
     }
 
+    //loop 마지막에만 호출, isamcurrentestimate를 메인으로 보정
     void correctPoses(){
     	if (aLoopIsClosed == true){
             recentCornerCloudKeyFrames. clear();
@@ -1461,10 +1519,12 @@ public:
             // update key poses
                 int numPoses = isamCurrentEstimate.size();
             for (int i = 0; i < numPoses; ++i){
+            //cloudKeyPoses3D로 translation update
             cloudKeyPoses3D->points[i].x = isamCurrentEstimate.at<Pose3>(i).translation().y();
             cloudKeyPoses3D->points[i].y = isamCurrentEstimate.at<Pose3>(i).translation().z();
             cloudKeyPoses3D->points[i].z = isamCurrentEstimate.at<Pose3>(i).translation().x();
 
+            //cloudKeyPoses6D로 attitude angle update
             cloudKeyPoses6D->points[i].x = cloudKeyPoses3D->points[i].x;
             cloudKeyPoses6D->points[i].y = cloudKeyPoses3D->points[i].y;
             cloudKeyPoses6D->points[i].z = cloudKeyPoses3D->points[i].z;
@@ -1515,7 +1575,6 @@ public:
                 publishTF();
 
                 publishKeyPosesAndFrames();
-
                 clearCloud();
             }
         }
@@ -1531,20 +1590,26 @@ int main(int argc, char** argv)
 
     mapOptimization MO;
 
+    //key function
+    //std::thread constructor, MO use as a parameter structure thread
+    //this function is to detect a closed-loop and closed-loop correction
+    //'loopthread' is a function pointer to a member function 'loopClosureThread'
     std::thread loopthread(&mapOptimization::loopClosureThread, &MO);
+    //work carried out in this thread is publishGlobalmap(), will publish data to the ros, visualization
     std::thread visualizeMapThread(&mapOptimization::visualizeGlobalMapThread, &MO);
 
     ros::Rate rate(200);
     while (ros::ok())
     {
         ros::spinOnce();
-
+        
+        //most important key function
         MO.run();
 
         rate.sleep();
     }
 
-    loopthread.join();
+    loopthread.join();//thread가 종료될 때까지 기다리는 함수
     visualizeMapThread.join();
 
     return 0;
