@@ -134,4 +134,75 @@ def convert_fuse(pointcloud_df, min_x = 0.0, min_y = 0.0, min_z = 0.0):
 
 ## 0924
 
-+ jsk !!!!!!!!!
++ Analyze the code with meshlab: install meshlab and save to ply file.
+```
+def write_pointcloud(filename,xyz_points,rgb_points=None):
+
+    """ creates a .pkl file of the point clouds generated
+    """
+
+    assert xyz_points.shape[1] == 3,'Input XYZ points should be Nx3 float array'
+    if rgb_points is None:
+        rgb_points = np.ones(xyz_points.shape).astype(np.uint8)*255
+    assert xyz_points.shape == rgb_points.shape,'Input RGB colors should be Nx3 float array and have same size as input XYZ points'
+
+    # Write header of .ply file
+    fid = open(filename,'wb')
+    fid.write(bytes('ply\n', 'utf-8'))
+    fid.write(bytes('format binary_little_endian 1.0\n', 'utf-8'))
+    fid.write(bytes('element vertex %d\n'%xyz_points.shape[0], 'utf-8'))
+    fid.write(bytes('property float x\n', 'utf-8'))
+    fid.write(bytes('property float y\n', 'utf-8'))
+    fid.write(bytes('property float z\n', 'utf-8'))
+    fid.write(bytes('property uchar red\n', 'utf-8'))
+    fid.write(bytes('property uchar green\n', 'utf-8'))
+    fid.write(bytes('property uchar blue\n', 'utf-8'))
+    fid.write(bytes('end_header\n', 'utf-8'))
+
+    # Write 3D points to .ply file
+    for i in range(xyz_points.shape[0]):
+        fid.write(bytearray(struct.pack("fffccc",xyz_points[i,0],xyz_points[i,1],xyz_points[i,2],
+                                        rgb_points[i,0].tostring(),rgb_points[i,1].tostring(),
+                                        rgb_points[i,2].tostring())))
+    fid.close()
+
+
+```
+> Reference: https://gist.github.com/Shreeyak/9a4948891541cb32b501d058db227fff  
+  
+1. original point(no utm conversion)    
+![image](https://user-images.githubusercontent.com/44723287/94144527-34176580-feac-11ea-927a-d61a0f6404a1.png)  
+  
+It works well, and good at lane detection like below picture.  we can save time !!   
+![image](https://user-images.githubusercontent.com/44723287/94144733-7b055b00-feac-11ea-9c09-6c6c71f51b21.png)  
+  
+2. Try to add color to clustering  
+
+```
+#(0,0,0) , (255/number_of_cluster,255/number_of_cluster,255/number_of_cluster)
+# (255/number_of_cluster,255/number_of_cluster,255/number_of_cluster)*2 ,,,
+
+temp_cluster = pd.DataFrame()
+for cluster in range(n_clusters_):
+    sub_cluster_df = cluster_df[cluster_df["Group"] == cluster]
+    tmp = int(255/(n_clusters_+1)*(cluster+1))
+    
+    sub_cluster_df["r"]=tmp
+    sub_cluster_df["g"]=tmp
+    sub_cluster_df["b"]=tmp
+    cluster_df[cluster_df["Group"] == cluster] = sub_cluster_df
+    
+
+sub_cluster_df = cluster_df[cluster_df["Group"] == -1]   
+sub_cluster_df["r"]=0
+sub_cluster_df["g"]=0
+sub_cluster_df["b"]=0
+cluster_df[cluster_df["Group"] == -1]=sub_cluster_df
+```
++ future work  
+  
+1. change clustering algorithm(no dbscan)
+2. remove noise
+3. line fitting algorithm
+
+
