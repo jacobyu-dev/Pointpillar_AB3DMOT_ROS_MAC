@@ -206,3 +206,4 @@ cluster_df[cluster_df["Group"] == -1]=sub_cluster_df
 3. line fitting algorithm
 
 
+>> gpu 사용여부 확인, 성능비교할때는 시간측정해서 자료 준비, 각각의 단계별로 이미지사진 준비 
