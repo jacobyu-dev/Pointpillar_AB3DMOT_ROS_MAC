@@ -237,13 +237,9 @@ scikit learn 클러스터링 알고리즘 중 클러스터 수를 인자로 받�
 ![ransacline](https://user-images.githubusercontent.com/44723287/95052620-37231900-072a-11eb-808d-5f61e68a276b.png)
 
 
-=======
->>>>>>> parent of baffb3e... Update READ_ME.md
-=======
->>>>>>> parent of baffb3e... Update READ_ME.md
-=======
->>>>>>> parent of baffb3e... Update READ_ME.md
-=======
->>>>>>> parent of baffb3e... Update READ_ME.md
-=======
->>>>>>> parent of baffb3e... Update READ_ME.md
++ remove noise
+도로부분만 추출해보기!!(아직안함)
+
++ rviz에 차선 그리기: rviz marker(line strip)이용!!
+> reference: https://answers.ros.org/question/203782/rviz-marker-line_strip-is-not-displayed/
+어떻게 ransaclines의 포인트를 rviz marker point에 넣을지 생각하기!!
