@@ -49,11 +49,6 @@ private:
     ros::Publisher pubSegmentedCloudPure;
     ros::Publisher pubSegmentedCloudInfo;
     ros::Publisher pubOutlierCloud;
-    //추가
-    ros::Publisher pubGroundCloudIntensity;
-
-    //추가
-    pcl::PointCloud<PointType>::Ptr groundCloudIntensity;
 
     pcl::PointCloud<PointType>::Ptr laserCloudIn;
     pcl::PointCloud<PointXYZIR>::Ptr laserCloudInRing;
@@ -75,12 +70,11 @@ private:
 
     float startOrientation;
     float endOrientation;
-    
-    cloud_msgs::cloud_info segMsg; // info of segmented cloud
-    std_msgs::Header cloudHeader;//uint32 seq, time stamp, string frame_id
 
-    //// neighbor iterator for segmentaiton process
-    std::vector<std::pair<int8_t, int8_t> > neighborIterator; 
+    cloud_msgs::cloud_info segMsg; // info of segmented cloud
+    std_msgs::Header cloudHeader;
+
+    std::vector<std::pair<int8_t, int8_t> > neighborIterator; // neighbor iterator for segmentaiton process
 
     uint16_t *allPushedIndX; // array for tracking points of a segmented object
     uint16_t *allPushedIndY;
@@ -91,11 +85,9 @@ private:
 public:
     ImageProjection():
         nh("~"){
-        //구독 ("토픽명", queue size, callback 함수)
-        //extern const string pointCloudTopic = "/velodyne_points"; in utility.h
+
         subLaserCloud = nh.subscribe<sensor_msgs::PointCloud2>(pointCloudTopic, 1, &ImageProjection::cloudHandler, this);
-        
-        //발행 ("토픽명", queue size)
+
         pubFullCloud = nh.advertise<sensor_msgs::PointCloud2> ("/full_cloud_projected", 1);
         pubFullInfoCloud = nh.advertise<sensor_msgs::PointCloud2> ("/full_cloud_info", 1);
 
@@ -104,22 +96,17 @@ public:
         pubSegmentedCloudPure = nh.advertise<sensor_msgs::PointCloud2> ("/segmented_cloud_pure", 1);
         pubSegmentedCloudInfo = nh.advertise<cloud_msgs::cloud_info> ("/segmented_cloud_info", 1);
         pubOutlierCloud = nh.advertise<sensor_msgs::PointCloud2> ("/outlier_cloud", 1);
-        //추가
-        pubGroundCloudIntensity = nh.advertise<sensor_msgs::PointCloud2> ("/ground_cloud_intensity", 1);
 
-        //nan(Not a number) is point types
         nanPoint.x = std::numeric_limits<float>::quiet_NaN();
         nanPoint.y = std::numeric_limits<float>::quiet_NaN();
         nanPoint.z = std::numeric_limits<float>::quiet_NaN();
         nanPoint.intensity = -1;
-        
+
         allocateMemory();
         resetParameters();
     }
 
     void allocateMemory(){
-        //추가
-        groundCloudIntensity.reset(new pcl::PointCloud<PointType>());
 
         laserCloudIn.reset(new pcl::PointCloud<PointType>());
         laserCloudInRing.reset(new pcl::PointCloud<PointXYZIR>());
@@ -131,97 +118,68 @@ public:
         segmentedCloud.reset(new pcl::PointCloud<PointType>());
         segmentedCloudPure.reset(new pcl::PointCloud<PointType>());
         outlierCloud.reset(new pcl::PointCloud<PointType>());
-        
-        //N_SCAN = 16(채널 수), Horizon_SCAN = 1800(MeasurementsPerRotation)
-        fullCloud->points.resize(N_SCAN*Horizon_SCAN);//28800개
+
+        fullCloud->points.resize(N_SCAN*Horizon_SCAN);
         fullInfoCloud->points.resize(N_SCAN*Horizon_SCAN);
 
-        //assign(원소의 개수, 가ㅄ);
         segMsg.startRingIndex.assign(N_SCAN, 0);
         segMsg.endRingIndex.assign(N_SCAN, 0);
 
-        //N_SCAN*Horizon_SCAN = 16*1800 array
         segMsg.segmentedCloudGroundFlag.assign(N_SCAN*Horizon_SCAN, false);
         segMsg.segmentedCloudColInd.assign(N_SCAN*Horizon_SCAN, 0);
         segMsg.segmentedCloudRange.assign(N_SCAN*Horizon_SCAN, 0);
 
-        //segmentation process를 위해 구역 나누는듯?
         std::pair<int8_t, int8_t> neighbor;
         neighbor.first = -1; neighbor.second =  0; neighborIterator.push_back(neighbor);
         neighbor.first =  0; neighbor.second =  1; neighborIterator.push_back(neighbor);
         neighbor.first =  0; neighbor.second = -1; neighborIterator.push_back(neighbor);
         neighbor.first =  1; neighbor.second =  0; neighborIterator.push_back(neighbor);
 
-        // array for tracking points of a segmented object
         allPushedIndX = new uint16_t[N_SCAN*Horizon_SCAN];
         allPushedIndY = new uint16_t[N_SCAN*Horizon_SCAN];
 
-        // array for breadth(폭)-first search process of segmentation, for speed
         queueIndX = new uint16_t[N_SCAN*Horizon_SCAN];
         queueIndY = new uint16_t[N_SCAN*Horizon_SCAN];
     }
 
     void resetParameters(){
-        //cloud point reset
         laserCloudIn->clear();
         groundCloud->clear();
         segmentedCloud->clear();
         segmentedCloudPure->clear();
         outlierCloud->clear();
-        //추가
-        groundCloudIntensity->clear();
 
-        //Matrix초기화
-        //CV_32F(32bit floating-point number)
-        //CV_8S(8bit signed integer)
-        //cv::scalar::all(0) 모든 matrix 0으로 초기화
-        //FLT_MAX floating 최대 가ㅄ
         rangeMat = cv::Mat(N_SCAN, Horizon_SCAN, CV_32F, cv::Scalar::all(FLT_MAX));
         groundMat = cv::Mat(N_SCAN, Horizon_SCAN, CV_8S, cv::Scalar::all(0));
         labelMat = cv::Mat(N_SCAN, Horizon_SCAN, CV_32S, cv::Scalar::all(0));
         labelCount = 1;
-        //matrix 확인
-        //cout << "rangeMat = " << endl << " " << groundMat << endl << endl;
 
-        //fullCloud, fullInfoCloud의 포인트들을 nan으로 다 채운다.
         std::fill(fullCloud->points.begin(), fullCloud->points.end(), nanPoint);
         std::fill(fullInfoCloud->points.begin(), fullInfoCloud->points.end(), nanPoint);
     }
-    //reset 끝
 
     ~ImageProjection(){}
 
-    //velodyne point들을 받아서 함수 실행
     void copyPointCloud(const sensor_msgs::PointCloud2ConstPtr& laserCloudMsg){
 
         cloudHeader = laserCloudMsg->header;
-        // //cloudHeader.stamp = ros::Time::now(); // Ouster lidar users may need to uncomment this line
-        //lasercloudmsg(sensor msgs를) -> lasercloudin(pcl msgs로), 즉, data 택배 포장지 뜯기
+        // cloudHeader.stamp = ros::Time::now(); // Ouster lidar users may need to uncomment this line
         pcl::fromROSMsg(*laserCloudMsg, *laserCloudIn);
-        //추가
-        pcl::fromROSMsg(*laserCloudMsg, *groundCloudIntensity);
         // Remove Nan points
         std::vector<int> indices;
-        //pcl::removeNaNFromPointCloud(input point cloud, output point cloud, vector)
-        //revomes points with x,y,z equal to NaN.
         pcl::removeNaNFromPointCloud(*laserCloudIn, *laserCloudIn, indices);
-        //추가
-        pcl::removeNaNFromPointCloud(*groundCloudIntensity, *groundCloudIntensity, indices);
-        
         // have "ring" channel in the cloud
-        //extern const bool useCloudRing = true;
         if (useCloudRing == true){
-            //velodyne point들을 laserCloudInRing data로 택배 포장 뜯기
             pcl::fromROSMsg(*laserCloudMsg, *laserCloudInRing);
-            if (laserCloudInRing->is_dense == false) {//없으면 error 띄우기
+            if (laserCloudInRing->is_dense == false) {
                 ROS_ERROR("Point cloud is not in dense format, please remove NaN points first!");
                 ros::shutdown();
             }  
         }
     }
     
-    void cloudHandler(const sensor_msgs::PointCloud2ConstPtr& laserCloudMsg){//velodyne point들 받기
-        
+    void cloudHandler(const sensor_msgs::PointCloud2ConstPtr& laserCloudMsg){
+
         // 1. Convert ros message to pcl point cloud
         copyPointCloud(laserCloudMsg);
         // 2. Start and end angle of a scan
@@ -240,147 +198,107 @@ public:
 
     void findStartEndAngle(){
         // start and end orientation of this cloud
-        //cloud_msgs::cloud_info segMsg; // info of segmented cloud
         segMsg.startOrientation = -atan2(laserCloudIn->points[0].y, laserCloudIn->points[0].x);
         segMsg.endOrientation   = -atan2(laserCloudIn->points[laserCloudIn->points.size() - 1].y,
-                                                     laserCloudIn->points[laserCloudIn->points.size() - 1].x) + 2 * M_PI;//M_PI is pi
-        
+                                                     laserCloudIn->points[laserCloudIn->points.size() - 1].x) + 2 * M_PI;
         if (segMsg.endOrientation - segMsg.startOrientation > 3 * M_PI) {
             segMsg.endOrientation -= 2 * M_PI;
         } else if (segMsg.endOrientation - segMsg.startOrientation < M_PI)
             segMsg.endOrientation += 2 * M_PI;
-        // printf("2. startOrientation=%f, endOrientation=%f\n", segMsg.startOrientation* 180.0 / M_PI, segMsg.endOrientation* 180.0 / M_PI);
         segMsg.orientationDiff = segMsg.endOrientation - segMsg.startOrientation;
-        // printf("orientationDiff=%f \n\n", (segMsg.endOrientation-segMsg.startOrientation)* 180.0 / M_PI);
-        //segMsg.orientationDiff는 6.58~6.59(377도)로 일정, if문에서 맞춰줌(?)
-        
     }
 
     void projectPointCloud(){
         // range image projection
-        // intensity를 구하고 XYZI 정보를 fullcloud에 넣는 함수 + rangeMat에 포인트별 거리 넣는 함수
-        float verticalAngle, horizonAngle, range;//temp추가
+        float verticalAngle, horizonAngle, range;
         size_t rowIdn, columnIdn, index, cloudSize; 
-        PointType thisPoint;//pcl::pointXYZI
+        PointType thisPoint;
 
-        cloudSize = laserCloudIn->points.size();//★크기 궁금
-        
+        cloudSize = laserCloudIn->points.size();
+
         for (size_t i = 0; i < cloudSize; ++i){
+
             thisPoint.x = laserCloudIn->points[i].x;
             thisPoint.y = laserCloudIn->points[i].y;
             thisPoint.z = laserCloudIn->points[i].z;
-            //추가
-            groundCloudIntensity->points[i].intensity = (groundCloudIntensity->points[i].intensity)*255;
             // find the row and column index in the iamge for this point
             if (useCloudRing == true){
                 rowIdn = laserCloudInRing->points[i].ring;
             }
             else{
-                //radian이라 *180/pi 해주는 것 결국 degree로 변환
                 verticalAngle = atan2(thisPoint.z, sqrt(thisPoint.x * thisPoint.x + thisPoint.y * thisPoint.y)) * 180 / M_PI;
-                //rowIdn 구하기, 채널의 index 구하는듯.
-                //extern const float ang_res_x = 0.2;
-                //extern const float ang_res_y = 2.0;
-                //extern const float ang_bottom = 15.0+0.1;
                 rowIdn = (verticalAngle + ang_bottom) / ang_res_y;
             }
-            //printf("rowIdn = %zu ", rowIdn);
-            if (rowIdn < 0 || rowIdn >= N_SCAN)//채널 안에 들어오지 않으면 for문 끝으로
+            if (rowIdn < 0 || rowIdn >= N_SCAN)
                 continue;
-         
-            //채널 안에 들어오면 horizonangle 구하기
+
             horizonAngle = atan2(thisPoint.x, thisPoint.y) * 180 / M_PI;
-            //columnIdn 구하기, sample의 index 뜻하는 듯
-            columnIdn = -round((horizonAngle-90.0)/ang_res_x) + Horizon_SCAN/2;//round 반올림
-            
-            if (columnIdn >= Horizon_SCAN)//0 ~ 1800대 숫자 맞춰주는 작업
-                columnIdn -= Horizon_SCAN;
-            //printf("columnIdn = %zu    ", columnIdn);
 
-            if (columnIdn < 0 || columnIdn >= Horizon_SCAN)// 샘플 1800개 범위 밖을 벗어나면 for문 끝으로
+            columnIdn = -round((horizonAngle-90.0)/ang_res_x) + Horizon_SCAN/2;
+            if (columnIdn >= Horizon_SCAN)
+                columnIdn -= Horizon_SCAN;
+
+            if (columnIdn < 0 || columnIdn >= Horizon_SCAN)
                 continue;
 
-            //원점으로부터 거리 계산
             range = sqrt(thisPoint.x * thisPoint.x + thisPoint.y * thisPoint.y + thisPoint.z * thisPoint.z);
-            //printf("range = %f\n", range);
-
-            //extern const float sensorMinimumRange = 1.0;
-            //1보다 작으면 Matrix에 넣지 않음
             if (range < sensorMinimumRange)
                 continue;
-            //해당되는 row 와 column에 range 거리가 대입, 대입되지 않는 곳은 168번 줄에 넣었던 FLT_MAX 가ㅄ.
-            rangeMat.at<float>(rowIdn, columnIdn) = range;
             
-            //intensity로 00.0000을 표현하는데 정수 부분은 row, 소수 부분은 column 으로 표현
-            //thispoint의 intensity자리에 대입
+            rangeMat.at<float>(rowIdn, columnIdn) = range;
+
             thisPoint.intensity = (float)rowIdn + (float)columnIdn / 10000.0;
 
             index = columnIdn  + rowIdn * Horizon_SCAN;
-            
-            fullCloud->points[index] = thisPoint;//size = 28800개 의 index에 thispoint(x,y,z,i) 대입
-            fullInfoCloud->points[index] = thisPoint;//위와 동일
+            fullCloud->points[index] = thisPoint;
+            fullInfoCloud->points[index] = thisPoint;
             fullInfoCloud->points[index].intensity = range; // the corresponding range of a point is saved as "intensity"
-                                                            // fullInfocloud의 intensity에는 range 대입
         }
-        //cout << "rangeMat = " << endl << " " << rangeMat << endl << endl;
     }
 
-    //segmentation(ground extraction)
+
     void groundRemoval(){
-        size_t lowerInd, upperInd;//size_t는 부호없는 64비트 정수, index가 매우 커질 때 사용
+        size_t lowerInd, upperInd;
         float diffX, diffY, diffZ, angle;
         // groundMat
         // -1, no valid info to check if ground of not
         //  0, initial value, after validation, means not ground
         //  1, ground
-        for (size_t j = 0; j < Horizon_SCAN; ++j){//1800동안 반복
-            for (size_t i = 0; i < groundScanInd; ++i){//7동안 반복
+        for (size_t j = 0; j < Horizon_SCAN; ++j){
+            for (size_t i = 0; i < groundScanInd; ++i){
 
-                //7개 층들의 동일한 위, 아래 index
                 lowerInd = j + ( i )*Horizon_SCAN;
                 upperInd = j + (i+1)*Horizon_SCAN;
 
-                //아래서부터 7개의 ring의 1800개 샘플을 검사하는데 intensity가 -1이면
-                //ground 인지 아닌지 불명확
                 if (fullCloud->points[lowerInd].intensity == -1 ||
                     fullCloud->points[upperInd].intensity == -1){
                     // no info to check, invalid points
                     groundMat.at<int8_t>(i,j) = -1;
                     continue;
                 }
-                //위 아래 point들의 x, y, z의 차를 구함, 0부터 7층까지 한 sample의 index 순으로 구함.
+                    
                 diffX = fullCloud->points[upperInd].x - fullCloud->points[lowerInd].x;
                 diffY = fullCloud->points[upperInd].y - fullCloud->points[lowerInd].y;
                 diffZ = fullCloud->points[upperInd].z - fullCloud->points[lowerInd].z;
-                //printf("%d층의 %zu 번째 sample\n", i, j);
-                
-                //diffx, diffy, diffz로 베타를 구함 z가 높을 수록 angle이 높아져 ground로 판정하지 않음
-                //diffz가 높다는 것은 위층 아래층의 Z축 차이가 크다는 것, 즉 ground가 아니라 어떤 물체일 가능성
-                angle = atan2(diffZ, sqrt(diffX*diffX + diffY*diffY) ) * 180 / M_PI;
-                //printf("angle = %f\n\n", angle);
 
-                //extern const float sensorMountAngle = 0.0; in utility.h
-                //보통 -1~1사이 가ㅄ, 10이하는 groundMatrix에 X
+                angle = atan2(diffZ, sqrt(diffX*diffX + diffY*diffY) ) * 180 / M_PI;
+
                 if (abs(angle - sensorMountAngle) <= 10){
-                    groundMat.at<int8_t>(i,j) = 0;
-                    groundMat.at<int8_t>(i+1,j) = 0;
+                    groundMat.at<int8_t>(i,j) = 1;
+                    groundMat.at<int8_t>(i+1,j) = 1;
                 }
             }
         }
         // extract ground cloud (groundMat == 1)
         // mark entry that doesn't need to label (ground and invalid point) for segmentation
         // note that ground remove is from 0~N_SCAN-1, need rangeMat for mark label matrix for the 16th scan
-        for (size_t i = 0; i < N_SCAN; ++i){//16개의 채널
-            for (size_t j = 0; j < Horizon_SCAN; ++j){//1800개의 샘플 수 
-                //ground matrix가 ground로 판정 나거나, range matrix에 range가ㅄ이 들어오지 않았을때 
+        for (size_t i = 0; i < N_SCAN; ++i){
+            for (size_t j = 0; j < Horizon_SCAN; ++j){
                 if (groundMat.at<int8_t>(i,j) == 1 || rangeMat.at<float>(i,j) == FLT_MAX){
-                    labelMat.at<int>(i,j) = -1;//label matrix에 -1대입, reset때 모두 0으로 초기화 했었음
+                    labelMat.at<int>(i,j) = -1;
                 }
             }
         }
-        
-        //printf("pubGroundCloud.getNumSubscribers() = %d\n\n", pubGroundCloud.getNumSubscribers());
-        //pubGroundCloud.getNumSubscribers() 이 pub에 연결된 sub의 수가 0이 아니면 if문 진입, 함수내용은 모르겠음
         if (pubGroundCloud.getNumSubscribers() != 0){
             for (size_t i = 0; i <= groundScanInd; ++i){
                 for (size_t j = 0; j < Horizon_SCAN; ++j){
@@ -393,59 +311,54 @@ public:
 
     void cloudSegmentation(){
         // segmentation process
-        for (size_t i = 0; i < N_SCAN; ++i)//16번
-            for (size_t j = 0; j < Horizon_SCAN; ++j)//1800번
-                if (labelMat.at<int>(i,j) == 0)//groundMatrix는 1, rangeMatrix는 FLT_MAX, 제외 포인트 들은 다 0일 것
-                    labelComponents(i, j);//해당좌표의 가ㅄ이 0인 point들을 labelComponents함수로
-        
+        for (size_t i = 0; i < N_SCAN; ++i)
+            for (size_t j = 0; j < Horizon_SCAN; ++j)
+                if (labelMat.at<int>(i,j) == 0)
+                    labelComponents(i, j);
+
         int sizeOfSegCloud = 0;
-        //segmentedCloudprintf("sizeOfSegCloud = %d\n", sizeOfSegCloud);
         // extract segmented cloud for lidar odometry
         for (size_t i = 0; i < N_SCAN; ++i) {
 
-            segMsg.startRingIndex[i] = sizeOfSegCloud-1 + 5;//cloud_msgs::cloud_info segMsg, startRingIndex는 16개
-            //printf("startRingIndex[%zu] = %d\n", i, segMsg.startRingIndex[i]);
-            for (size_t j = 0; j < Horizon_SCAN; ++j) {//1800반복
-                if (labelMat.at<int>(i,j) > 0 || groundMat.at<int8_t>(i,j) == 1){//range and FLT_MAX || ground 
+            segMsg.startRingIndex[i] = sizeOfSegCloud-1 + 5;
+
+            for (size_t j = 0; j < Horizon_SCAN; ++j) {
+                if (labelMat.at<int>(i,j) > 0 || groundMat.at<int8_t>(i,j) == 1){
                     // outliers that will not be used for optimization (always continue)
-                    if (labelMat.at<int>(i,j) == 999999){//FLT_MAX일 때
-                        if (i > groundScanInd && j % 5 == 0){//ring이 7보다 위 채널이고, sample이 5의 배수 라면
-                            //j + i*Horizon_SCAN 인덱스에 들어있는 fullCloud가ㅄ을 outlierCloud에 대입
+                    if (labelMat.at<int>(i,j) == 999999){
+                        if (i > groundScanInd && j % 5 == 0){
                             outlierCloud->push_back(fullCloud->points[j + i*Horizon_SCAN]);
                             continue;
-                        }else{//range 있을 때
+                        }else{
                             continue;
                         }
                     }
                     // majority of ground points are skipped
-                    if (groundMat.at<int8_t>(i,j) == 1){//확실한 ground Matrix
-                        if (j%5!=0 && j>5 && j<Horizon_SCAN-5)//중에 sample이 5이상인 5의 배수이고 1795보다 작을 때 
+                    if (groundMat.at<int8_t>(i,j) == 1){
+                        if (j%5!=0 && j>5 && j<Horizon_SCAN-5)
                             continue;
                     }
-                    //여기를 지나는 matrix는 range가 있는 matrix들
                     // mark ground points so they will not be considered as edge features later
                     segMsg.segmentedCloudGroundFlag[sizeOfSegCloud] = (groundMat.at<int8_t>(i,j) == 1);
                     // mark the points' column index for marking occlusion later
-                    //index (i+1)-i = segment된 point 수
                     segMsg.segmentedCloudColInd[sizeOfSegCloud] = j;
                     // save range info
                     segMsg.segmentedCloudRange[sizeOfSegCloud]  = rangeMat.at<float>(i,j);
                     // save seg cloud
                     segmentedCloud->push_back(fullCloud->points[j + i*Horizon_SCAN]);
                     // size of seg cloud
-                    ++sizeOfSegCloud;//16개층에 걸친 segmented cloud 수(?)
+                    ++sizeOfSegCloud;
                 }
             }
-            //printf("sizeOfSegCloud=%d\n", sizeOfSegCloud);
+
             segMsg.endRingIndex[i] = sizeOfSegCloud-1 - 5;
-            //printf("endRingIndex[%zu] =%d \n\n", i, segMsg.endRingIndex[i]);
         }
         
         // extract segmented cloud for visualization
-        if (pubSegmentedCloudPure.getNumSubscribers() != 0){//이 pub에 연결된 sub 수가 0 이 아니면 들어오라
-            for (size_t i = 0; i < N_SCAN; ++i){//16번 반복
-                for (size_t j = 0; j < Horizon_SCAN; ++j){//1800번 반복
-                    if (labelMat.at<int>(i,j) > 0 && labelMat.at<int>(i,j) != 999999){//ground matrix 해당
+        if (pubSegmentedCloudPure.getNumSubscribers() != 0){
+            for (size_t i = 0; i < N_SCAN; ++i){
+                for (size_t j = 0; j < Horizon_SCAN; ++j){
+                    if (labelMat.at<int>(i,j) > 0 && labelMat.at<int>(i,j) != 999999){
                         segmentedCloudPure->push_back(fullCloud->points[j + i*Horizon_SCAN]);
                         segmentedCloudPure->points.back().intensity = labelMat.at<int>(i,j);
                     }
@@ -460,7 +373,6 @@ public:
         int fromIndX, fromIndY, thisIndX, thisIndY; 
         bool lineCountFlag[N_SCAN] = {false};
 
-        //labelMat에서 ground로 판정되지 않은 포인트 x, y를 받아서 x=row, y=col으로
         queueIndX[0] = row;
         queueIndY[0] = col;
         int queueSize = 1;
@@ -473,26 +385,20 @@ public:
         
         while(queueSize > 0){
             // Pop point
-            //queueStartInd=0부터 시작이니 들어온 x,y좌표를 대입
             fromIndX = queueIndX[queueStartInd];
             fromIndY = queueIndY[queueStartInd];
             --queueSize;
             ++queueStartInd;
             // Mark popped point
-            //printf("for문 들어오기 전 fromIndX=%d, fromIndY=%d\n", fromIndX, fromIndY);
-
-            labelMat.at<int>(fromIndX, fromIndY) = labelCount;//초기세팅 labelCount=1, 즉 labelMat해당 좌표가 0->1로 바뀜
+            labelMat.at<int>(fromIndX, fromIndY) = labelCount;
             // Loop through all the neighboring grids of popped grid
             for (auto iter = neighborIterator.begin(); iter != neighborIterator.end(); ++iter){
-                //neighborIterator(-1,0) -> (0,1) -> (0, -1) -> (1, 0)순
                 // new index
-                thisIndX = fromIndX + (*iter).first; //들어온 x좌표 + iter(-1 -> 0 -> 0 -> 1 순)
-                thisIndY = fromIndY + (*iter).second; //들어온 y좌표 + iter(0 -> 1 -> -1 -> 0 순)
-                //printf("%d", (*iter).first);
-                //printf(" 째 thisIndX=%d, thisIndY=%d\n", thisIndX, thisIndY);
+                thisIndX = fromIndX + (*iter).first;
+                thisIndY = fromIndY + (*iter).second;
                 // index should be within the boundary
                 if (thisIndX < 0 || thisIndX >= N_SCAN)
-                    continue;//들어온 x좌표가 0보다 작거나 16보다 이상이면 다음 반복 시작
+                    continue;
                 // at range image margin (left or right side)
                 if (thisIndY < 0)
                     thisIndY = Horizon_SCAN - 1;
@@ -500,63 +406,54 @@ public:
                     thisIndY = 0;
                 // prevent infinite loop (caused by put already examined point back)
                 if (labelMat.at<int>(thisIndX, thisIndY) != 0)
-                    continue;//다음 반복 시작
+                    continue;
 
-                //여기까지 한점의 주변 점 4개 뽑았고 거를것 거름
-                //input : fromIndX, fromIndY -> output : thisIndX, thisIndY 
-                //보통 Y 1증가 or X 1증가
-                //포인트의 거리가 담겨있던 rangeMat의 index비교해서 거리가 젤 먼 max, 젤 가까운 min
                 d1 = std::max(rangeMat.at<float>(fromIndX, fromIndY), 
                               rangeMat.at<float>(thisIndX, thisIndY));
                 d2 = std::min(rangeMat.at<float>(fromIndX, fromIndY), 
                               rangeMat.at<float>(thisIndX, thisIndY));
-                //printf("거른 후 thisIndX=%d, thisIndY=%d\n", thisIndX, thisIndY);
-                if ((*iter).first == 0)
-                    alpha = segmentAlphaX;//ang_res_x(0.2)의 radian
-                else
-                    alpha = segmentAlphaY;//ang_res_y(2.0)의 radian
 
-                //두 포인트로 얻어진 angle구하기 (논문의 베타)
+                if ((*iter).first == 0)
+                    alpha = segmentAlphaX;
+                else
+                    alpha = segmentAlphaY;
+
                 angle = atan2(d2*sin(alpha), (d1 -d2*cos(alpha)));
-                //angle이 60도 보다 커야 물체로 인정
-                //segmentTheta는 60도의 라디안
-                //if문 킵 , 뭔지 모르게음
-                if (angle > segmentTheta){//segmentTheta=1.04666
-                    queueIndX[queueEndInd] = thisIndX;//thisIndX : 이웃점 X
-                    queueIndY[queueEndInd] = thisIndY;//thisIndY : 이웃점 Y
-                    ++queueSize;//while문 돌 수 있게 해주는 변수
+
+                if (angle > segmentTheta){
+
+                    queueIndX[queueEndInd] = thisIndX;
+                    queueIndY[queueEndInd] = thisIndY;
+                    ++queueSize;
                     ++queueEndInd;
-                    
-                    labelMat.at<int>(thisIndX, thisIndY) = labelCount;//뭉치는 이웃점끼리 같은 labelCound 가짐
-                    //탐색한 주변 점들 중에서 angle이 큰 즉, segment된 물체들의 구분점이 된 ring의 인덱스
+
+                    labelMat.at<int>(thisIndX, thisIndY) = labelCount;
                     lineCountFlag[thisIndX] = true;
 
                     allPushedIndX[allPushedIndSize] = thisIndX;
                     allPushedIndY[allPushedIndSize] = thisIndY;
                     ++allPushedIndSize;
-                                        
                 }
             }
         }
 
         // check if this segment is valid
         bool feasibleSegment = false;
-        
-        if (allPushedIndSize >= 30)//30보다 적은 객체는 segment 삭제, 실제 가ㅄ)allPushedIndSize =50, 40, 31, 134, 256, 30, 503
+        if (allPushedIndSize >= 30)
             feasibleSegment = true;
-        else if (allPushedIndSize >= segmentValidPointNum){//5<= allPushedIndSize <=30
+        else if (allPushedIndSize >= segmentValidPointNum){
             int lineCount = 0;
-            for (size_t i = 0; i < N_SCAN; ++i)// 16번 반복
-                if (lineCountFlag[i] == true)//angle(논문에서 베타)이 60도 이상이었던 ring이라면
+            for (size_t i = 0; i < N_SCAN; ++i)
+                if (lineCountFlag[i] == true)
                     ++lineCount;
-            if (lineCount >= segmentValidLineNum)//angle(논문에서 베타)이 60도 이상인 ring이 3개 이상이라면
+            if (lineCount >= segmentValidLineNum)
                 feasibleSegment = true;            
         }
         // segment is valid, mark these points
-        if (feasibleSegment == true){//segment가 됐다면
+        if (feasibleSegment == true){
             ++labelCount;
         }else{ // segment is invalid, mark these points
-            for (size_t i = 0; i < allPushedIndSize; ++i){//segment 포인트 갯수만큼 다시 FLT_MAX로 설정
+            for (size_t i = 0; i < allPushedIndSize; ++i){
                 labelMat.at<int>(allPushedIndX[i], allPushedIndY[i]) = 999999;
             }
         }
@@ -593,13 +490,6 @@ public:
             laserCloudTemp.header.frame_id = "base_link";
             pubGroundCloud.publish(laserCloudTemp);
         }
-        //추가
-        if (pubGroundCloudIntensity.getNumSubscribers() != 0){
-            pcl::toROSMsg(*groundCloudIntensity, laserCloudTemp);
-            laserCloudTemp.header.stamp = cloudHeader.stamp;
-            laserCloudTemp.header.frame_id = "base_link";
-            pubGroundCloudIntensity.publish(laserCloudTemp);
-        }
         // segmented cloud without ground
         if (pubSegmentedCloudPure.getNumSubscribers() != 0){
             pcl::toROSMsg(*segmentedCloudPure, laserCloudTemp);
@@ -622,13 +512,12 @@ public:
 
 int main(int argc, char** argv){
 
-    ros::init(argc, argv, "test_lego_loam");
+    ros::init(argc, argv, "lego_loam");
     
     ImageProjection IP;
-    
+
     ROS_INFO("\033[1;32m---->\033[0m Image Projection Started.");
-    
+
     ros::spin();
-    
     return 0;
 }

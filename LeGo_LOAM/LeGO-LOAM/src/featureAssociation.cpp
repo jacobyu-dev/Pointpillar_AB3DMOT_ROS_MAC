@@ -222,7 +222,7 @@ public:
 
         cloudSmoothness.resize(N_SCAN*Horizon_SCAN);
 
-        downSizeFilter.setLeafSize(0.1, 0.1, 0.1);//셋 다 0.2
+        downSizeFilter.setLeafSize(0.2, 0.2, 0.2);
 
         segmentedCloud.reset(new pcl::PointCloud<PointType>());
         outlierCloud.reset(new pcl::PointCloud<PointType>());
@@ -409,7 +409,7 @@ public:
         accX = cos(yaw) * x2 + sin(yaw) * z2;
         accY = y2;
         accZ = -sin(yaw) * x2 + cos(yaw) * z2;
-        //imuPointerBack다음 점이 imuPointerLast
+
         int imuPointerBack = (imuPointerLast + imuQueLength - 1) % imuQueLength;
         double timeDiff = imuTime[imuPointerLast] - imuTime[imuPointerBack];
         if (timeDiff < scanPeriod) {
@@ -428,7 +428,6 @@ public:
         }
     }
 
-    //imuTopic을 받아서 실행
     void imuHandler(const sensor_msgs::Imu::ConstPtr& imuIn)
     {
         double roll, pitch, yaw;
@@ -459,7 +458,6 @@ public:
         AccumulateIMUShiftAndRotation();
     }
 
-    //"segmented_cloud" topic받아서 "segmentedCloud"라는 pcl msgs로 변환
     void laserCloudHandler(const sensor_msgs::PointCloud2ConstPtr& laserCloudMsg){
 
         cloudHeader = laserCloudMsg->header;
@@ -473,7 +471,6 @@ public:
         newSegmentedCloud = true;
     }
 
-    //"outlier_cloud" topic받아서 "outlierCloud"라는 pcl msgs로 변환
     void outlierCloudHandler(const sensor_msgs::PointCloud2ConstPtr& msgIn){
 
         timeNewOutlierCloud = msgIn->header.stamp.toSec();
@@ -484,7 +481,6 @@ public:
         newOutlierCloud = true;
     }
 
-    //"segmented_cloud_info" topic받아서 "segInfo"라는 pcl msgs로 변환
     void laserCloudInfoHandler(const cloud_msgs::cloud_infoConstPtr& msgIn)
     {
         timeNewSegmentedCloudInfo = msgIn->header.stamp.toSec();
@@ -492,8 +488,6 @@ public:
         newSegmentedCloudInfo = true;
     }
 
-    //point cloud 간에 relarive pose, time을 계산
-    //+relative movement speed 계산 + 얻어진 point cloud를 IMU data로 변환
     void adjustDistortion()
     {
         bool halfPassed = false;
@@ -507,9 +501,7 @@ public:
             point.y = segmentedCloud->points[i].z;
             point.z = segmentedCloud->points[i].x;
 
-            //ori 
             float ori = -atan2(point.x, point.z);
-            //printf("%f  ", ori* 180.0 / M_PI);
             if (!halfPassed) {
                 if (ori < segInfo.startOrientation - M_PI / 2)
                     ori += 2 * M_PI;
@@ -526,27 +518,20 @@ public:
                 else if (ori > segInfo.endOrientation + M_PI / 2)
                     ori -= 2 * M_PI;
             }
-            //printf("%f  \n", ori* 180.0 / M_PI);
 
-            //relTime = the rate of change of the angle, scanPeriod(0.1)을 곱해서 sacn cycle안에서 angular change의 양을 구함
             float relTime = (ori - segInfo.startOrientation) / segInfo.orientationDiff;
-            //printf("%f , point.intensity= %f   ", relTime, point.intensity);
-            //segmentedCloud intensity 업데이트
             point.intensity = int(segmentedCloud->points[i].intensity) + scanPeriod * relTime;
-            //printf("->  point.intensity=%f\n\n", point.intensity);
 
-            //data들을 정립해야하고 첫번 째 점을 initial coordinates로 지정하고 후 포인터들을 첫번 째 점을 참고하여 interpolate
-            if (imuPointerLast >= 0) {//초기 imuPointerLast=-1, imuHandler 지나면 0
-                float pointTime = relTime * scanPeriod;//relTime * 0.1
-                imuPointerFront = imuPointerLastIteration;//초기 imuPointerLastiteration = 0
+            if (imuPointerLast >= 0) {
+                float pointTime = relTime * scanPeriod;
+                imuPointerFront = imuPointerLastIteration;
                 while (imuPointerFront != imuPointerLast) {
-                    if (timeScanCur + pointTime < imuTime[imuPointerFront]) {//imuTime의 size 200, imuIn의 toSec()로 초기화
+                    if (timeScanCur + pointTime < imuTime[imuPointerFront]) {
                         break;
                     }
-                    //imupointerFront는 0~199를 rotate(queue size = 200)
                     imuPointerFront = (imuPointerFront + 1) % imuQueLength;
                 }
-                //전 data가 있다면 front data로 current data 얻기
+
                 if (timeScanCur + pointTime > imuTime[imuPointerFront]) {
                     imuRollCur = imuRoll[imuPointerFront];
                     imuPitchCur = imuPitch[imuPointerFront];
@@ -559,13 +544,13 @@ public:
                     imuShiftXCur = imuShiftX[imuPointerFront];
                     imuShiftYCur = imuShiftY[imuPointerFront];
                     imuShiftZCur = imuShiftZ[imuPointerFront];   
-                } else {//전 data가 없다면 current data 계산
+                } else {
                     int imuPointerBack = (imuPointerFront + imuQueLength - 1) % imuQueLength;
                     float ratioFront = (timeScanCur + pointTime - imuTime[imuPointerBack]) 
                                                      / (imuTime[imuPointerFront] - imuTime[imuPointerBack]);
                     float ratioBack = (imuTime[imuPointerFront] - timeScanCur - pointTime) 
                                                     / (imuTime[imuPointerFront] - imuTime[imuPointerBack]);
-                    //imu data 계산
+
                     imuRollCur = imuRoll[imuPointerFront] * ratioFront + imuRoll[imuPointerBack] * ratioBack;
                     imuPitchCur = imuPitch[imuPointerFront] * ratioFront + imuPitch[imuPointerBack] * ratioBack;
                     if (imuYaw[imuPointerFront] - imuYaw[imuPointerBack] > M_PI) {
@@ -575,7 +560,7 @@ public:
                     } else {
                         imuYawCur = imuYaw[imuPointerFront] * ratioFront + imuYaw[imuPointerBack] * ratioBack;
                     }
-                    
+
                     imuVeloXCur = imuVeloX[imuPointerFront] * ratioFront + imuVeloX[imuPointerBack] * ratioBack;
                     imuVeloYCur = imuVeloY[imuPointerFront] * ratioFront + imuVeloY[imuPointerBack] * ratioBack;
                     imuVeloZCur = imuVeloZ[imuPointerFront] * ratioFront + imuVeloZ[imuPointerBack] * ratioBack;
@@ -585,7 +570,7 @@ public:
                     imuShiftZCur = imuShiftZ[imuPointerFront] * ratioFront + imuShiftZ[imuPointerBack] * ratioBack;
                 }
 
-                if (i == 0) {//첫번 째 data라면 이 data를 coordinate의 시작 포인트로 설정
+                if (i == 0) {
                     imuRollStart = imuRollCur;
                     imuPitchStart = imuPitchCur;
                     imuYawStart = imuYawCur;
@@ -598,11 +583,11 @@ public:
                     imuShiftYStart = imuShiftYCur;
                     imuShiftZStart = imuShiftZCur;
 
-                    if (timeScanCur + pointTime > imuTime[imuPointerFront]) {//front data가 있다면
+                    if (timeScanCur + pointTime > imuTime[imuPointerFront]) {
                         imuAngularRotationXCur = imuAngularRotationX[imuPointerFront];
                         imuAngularRotationYCur = imuAngularRotationY[imuPointerFront];
                         imuAngularRotationZCur = imuAngularRotationZ[imuPointerFront];
-                    }else{//front data가 없다면 
+                    }else{
                         int imuPointerBack = (imuPointerFront + imuQueLength - 1) % imuQueLength;
                         float ratioFront = (timeScanCur + pointTime - imuTime[imuPointerBack]) 
                                                          / (imuTime[imuPointerFront] - imuTime[imuPointerBack]);
@@ -622,12 +607,11 @@ public:
                     imuAngularRotationZLast = imuAngularRotationZCur;
 
                     updateImuRollPitchYawStartSinCos();
-                } else {//첫 포인트가 아니라면
+                } else {
                     VeloToStartIMU();
                     TransformToStartIMU(&point);
                 }
             }
-            //IMU변화에 따른 x,y,z 업데이트 + start, end orientation에 따른 intensity 업데이트
             segmentedCloud->points[i] = point;
         }
 
@@ -639,7 +623,6 @@ public:
         int cloudSize = segmentedCloud->points.size();
         for (int i = 5; i < cloudSize - 5; i++) {
 
-            //segInfo.segmentedCloudRange에는 rangeMat의 거리정보가 있음
             float diffRange = segInfo.segmentedCloudRange[i-5] + segInfo.segmentedCloudRange[i-4]
                             + segInfo.segmentedCloudRange[i-3] + segInfo.segmentedCloudRange[i-2]
                             + segInfo.segmentedCloudRange[i-1] - segInfo.segmentedCloudRange[i] * 10
@@ -648,38 +631,28 @@ public:
                             + segInfo.segmentedCloudRange[i+5];            
 
             cloudCurvature[i] = diffRange*diffRange;
-            //Curvature에 따라 선인지 면인지 구분(크면 edge)
-            //printf("cloudCurvature[%d] = %f\n", i, cloudCurvature[i]);
+
             cloudNeighborPicked[i] = 0;
             cloudLabel[i] = 0;
 
-            //논문에서 c(curvature)가 cloudSmoothness.value로
-            /*
-            struct smoothness_t{ 
-                float value;
-                size_t ind;
-            };
-            */
             cloudSmoothness[i].value = cloudCurvature[i];
             cloudSmoothness[i].ind = i;
         }
     }
 
-    //맞물린 2개의 feature point가 너무 가까우면 좌표계로부터 가까운 point선택
-    //threshold보다 낮으면 가까운 point선택
     void markOccludedPoints()
     {
         int cloudSize = segmentedCloud->points.size();
 
         for (int i = 5; i < cloudSize - 6; ++i){
-            //segmentedCloudRange에는 index에 range가 있음
+
             float depth1 = segInfo.segmentedCloudRange[i];
             float depth2 = segInfo.segmentedCloudRange[i+1];
-            //columnDiff segment된 물체 포인트 수
             int columnDiff = std::abs(int(segInfo.segmentedCloudColInd[i+1] - segInfo.segmentedCloudColInd[i]));
-            
-            if (columnDiff < 10){//10개보다 적으면 거리가 먼 point들 지우기
-                if (depth1 - depth2 > 0.3){//1로 바꾸는것은 defects(depth2쪽이 가까우므로 depth1쪽 6개 점 defects)
+
+            if (columnDiff < 10){
+
+                if (depth1 - depth2 > 0.3){
                     cloudNeighborPicked[i - 5] = 1;
                     cloudNeighborPicked[i - 4] = 1;
                     cloudNeighborPicked[i - 3] = 1;
@@ -695,12 +668,10 @@ public:
                     cloudNeighborPicked[i + 6] = 1;
                 }
             }
-            //diff1은 궁금한 point와 이전의 point의 거리
+
             float diff1 = std::abs(float(segInfo.segmentedCloudRange[i-1] - segInfo.segmentedCloudRange[i]));
-            //diff2는 궁금한 point와 다음 point의 거리            
             float diff2 = std::abs(float(segInfo.segmentedCloudRange[i+1] - segInfo.segmentedCloudRange[i]));
 
-            //좌, 우 point와 궁금한점 거리가 개발자가 설정한(?) 0.02 보다 클 시, defects로 설정
             if (diff1 > 0.02 * segInfo.segmentedCloudRange[i] && diff2 > 0.02 * segInfo.segmentedCloudRange[i])
                 cloudNeighborPicked[i] = 1;
         }
@@ -717,27 +688,24 @@ public:
 
             surfPointsLessFlatScan->clear();
 
-            for (int j = 0; j < 6; j++) {//each layer의 point cloud를 6개 파트로 나눠서 진행.
+            for (int j = 0; j < 6; j++) {
 
                 int sp = (segInfo.startRingIndex[i] * (6 - j)    + segInfo.endRingIndex[i] * j) / 6;
                 int ep = (segInfo.startRingIndex[i] * (5 - j)    + segInfo.endRingIndex[i] * (j + 1)) / 6 - 1;
-                //printf("sp = %d , ep = %d\n\n", sp, ep);
+
                 if (sp >= ep)
                     continue;
 
                 std::sort(cloudSmoothness.begin()+sp, cloudSmoothness.begin()+ep, by_value());
 
                 int largestPickedNum = 0;
-                for (int k = ep; k >= sp; k--) {//층당 segment된 cloud만큼 돌리겠단 소리
-                    int ind = cloudSmoothness[k].ind;//cloudSmoothness(seg된 cloud임)에 저장된 index 소환
-                    //가까워서 pick당하고, edge threshold보다 높고, 땅이 아니라면
+                for (int k = ep; k >= sp; k--) {
+                    int ind = cloudSmoothness[k].ind;
                     if (cloudNeighborPicked[ind] == 0 &&
-                        cloudCurvature[ind] > edgeThreshold &&//Curvature가 0.1보다 크면 edge로 판정
+                        cloudCurvature[ind] > edgeThreshold &&
                         segInfo.segmentedCloudGroundFlag[ind] == false) {
                     
                         largestPickedNum++;
-                        //cloudLabel로 구분 주목, 곡률 구할때는 0이었으나 밑 if문에서 세밀하게 구분.
-                        //cloudLabel이 2면 sharp edge, 1이면 lessSharp edge
                         if (largestPickedNum <= 2) {
                             cloudLabel[ind] = 2;
                             cornerPointsSharp->push_back(segmentedCloud->points[ind]);
@@ -750,13 +718,13 @@ public:
                         }
 
                         cloudNeighborPicked[ind] = 1;
-                        for (int l = 1; l <= 5; l++) {//segment된 앞 index 5개도 비교
+                        for (int l = 1; l <= 5; l++) {
                             int columnDiff = std::abs(int(segInfo.segmentedCloudColInd[ind + l] - segInfo.segmentedCloudColInd[ind + l - 1]));
                             if (columnDiff > 10)
                                 break;
                             cloudNeighborPicked[ind + l] = 1;
                         }
-                        for (int l = -1; l >= -5; l--) {//segment된 뒤 index 5개도 비교
+                        for (int l = -1; l >= -5; l--) {
                             int columnDiff = std::abs(int(segInfo.segmentedCloudColInd[ind + l] - segInfo.segmentedCloudColInd[ind + l + 1]));
                             if (columnDiff > 10)
                                 break;
@@ -769,20 +737,19 @@ public:
                 for (int k = sp; k <= ep; k++) {
                     int ind = cloudSmoothness[k].ind;
                     if (cloudNeighborPicked[ind] == 0 &&
-                        //가까워서 pick당하고, surf threshold보다 낮고, 땅이 아니라면
                         cloudCurvature[ind] < surfThreshold &&
                         segInfo.segmentedCloudGroundFlag[ind] == true) {
 
-                        cloudLabel[ind] = -1;//surf는 cloudLabel -1
+                        cloudLabel[ind] = -1;
                         surfPointsFlat->push_back(segmentedCloud->points[ind]);
 
                         smallestPickedNum++;
-                        if (smallestPickedNum >= 4) {//4번 이상 돌아가면 다음 점 
+                        if (smallestPickedNum >= 4) {
                             break;
                         }
 
                         cloudNeighborPicked[ind] = 1;
-                        for (int l = 1; l <= 5; l++) {//segment된 앞 index 5개도 비교
+                        for (int l = 1; l <= 5; l++) {
 
                             int columnDiff = std::abs(int(segInfo.segmentedCloudColInd[ind + l] - segInfo.segmentedCloudColInd[ind + l - 1]));
                             if (columnDiff > 10)
@@ -790,7 +757,7 @@ public:
 
                             cloudNeighborPicked[ind + l] = 1;
                         }
-                        for (int l = -1; l >= -5; l--) {//segment된 뒤 index 5개도 비교
+                        for (int l = -1; l >= -5; l--) {
 
                             int columnDiff = std::abs(int(segInfo.segmentedCloudColInd[ind + l] - segInfo.segmentedCloudColInd[ind + l + 1]));
                             if (columnDiff > 10)
@@ -802,15 +769,15 @@ public:
                 }
 
                 for (int k = sp; k <= ep; k++) {
-                    if (cloudLabel[k] <= 0) {// surf로 측정되지 못한
+                    if (cloudLabel[k] <= 0) {
                         surfPointsLessFlatScan->push_back(segmentedCloud->points[k]);
                     }
                 }
             }
 
             surfPointsLessFlatScanDS->clear();
-            downSizeFilter.setInputCloud(surfPointsLessFlatScan);//입력
-            downSizeFilter.filter(*surfPointsLessFlatScanDS);//출력
+            downSizeFilter.setInputCloud(surfPointsLessFlatScan);
+            downSizeFilter.filter(*surfPointsLessFlatScanDS);
 
             *surfPointsLessFlat += *surfPointsLessFlatScanDS;
         }
@@ -891,11 +858,8 @@ public:
 
 
     void TransformToStart(PointType const * const pi, PointType * const po)
-    {//pi는 한 프레임당 들어온 edge판정 or plane판정 포인트 수, po는 pi의 transform한 포인트
-        //VLP-16
-        //float s = 10 * (pi->intensity - int(pi->intensity));
-        //HDL-64e
-        float s = 1;
+    {
+        float s = 10 * (pi->intensity - int(pi->intensity));
 
         float rx = s * transformCur[0];
         float ry = s * transformCur[1];
@@ -916,8 +880,6 @@ public:
         po->y = y2;
         po->z = sin(ry) * x2 + cos(ry) * z2;
         po->intensity = pi->intensity;
-        //printf("pi= %f, %f, %f, %f    ", pi->x, pi->y, pi->z, pi->intensity);
-        //printf("po= %f, %f, %f, %f\n", po->x, po->y, po->z, po->intensity);
     }
 
     void TransformToEnd(PointType const * const pi, PointType * const po)
@@ -1079,27 +1041,25 @@ public:
         return degrees * M_PI / 180.0;
     }
 
-    //edge feature correspondence finding
     void findCorrespondingCornerFeatures(int iterCount){
 
         int cornerPointsSharpNum = cornerPointsSharp->points.size();
 
         for (int i = 0; i < cornerPointsSharpNum; i++) {
-            //점의 위치가 미세하게 변해서 pointSel에 저장됨.
+
             TransformToStart(&cornerPointsSharp->points[i], &pointSel);
 
             if (iterCount % 5 == 0) {
-                ////궁금한 점 point, 검색할 이웃 점의 수 k, 이웃 점들의 결과 인덱스 k_indices(int vector), 이웃 점들의 squared distances(float vector) 결과
+
                 kdtreeCornerLast->nearestKSearch(pointSel, 1, pointSearchInd, pointSearchSqDis);
                 int closestPointInd = -1, minPointInd2 = -1;
                 
-                if (pointSearchSqDis[0] < nearestFeatureSearchSqDist){//nearestFeatureSearchSqDist=25
+                if (pointSearchSqDis[0] < nearestFeatureSearchSqDist) {
                     closestPointInd = pointSearchInd[0];
                     int closestPointScan = int(laserCloudCornerLast->points[closestPointInd].intensity);
 
                     float pointSqDis, minPointSqDis2 = nearestFeatureSearchSqDist;
                     for (int j = closestPointInd + 1; j < cornerPointsSharpNum; j++) {
-                        //+이웃 점이 젤 가까운 point의 intensity보다 2.5클 때
                         if (int(laserCloudCornerLast->points[j].intensity) > closestPointScan + 2.5) {
                             break;
                         }
@@ -1110,7 +1070,7 @@ public:
                                      (laserCloudCornerLast->points[j].y - pointSel.y) + 
                                      (laserCloudCornerLast->points[j].z - pointSel.z) * 
                                      (laserCloudCornerLast->points[j].z - pointSel.z);
-                        //+이웃 점이 젤 가까운 point의 intensity가 2.5보다 작고 0보다 클 때 
+
                         if (int(laserCloudCornerLast->points[j].intensity) > closestPointScan) {
                             if (pointSqDis < minPointSqDis2) {
                                 minPointSqDis2 = pointSqDis;
@@ -1119,7 +1079,6 @@ public:
                         }
                     }
                     for (int j = closestPointInd - 1; j >= 0; j--) {
-                        //-이웃 점이 젤 가까운 point의 intensity보다 2.5작을 때
                         if (int(laserCloudCornerLast->points[j].intensity) < closestPointScan - 2.5) {
                             break;
                         }
@@ -1130,7 +1089,7 @@ public:
                                      (laserCloudCornerLast->points[j].y - pointSel.y) + 
                                      (laserCloudCornerLast->points[j].z - pointSel.z) * 
                                      (laserCloudCornerLast->points[j].z - pointSel.z);
-                        //-이웃 점이 젤 가까운 point의 intensity보다 2.5크고 0보다 작을 때
+
                         if (int(laserCloudCornerLast->points[j].intensity) < closestPointScan) {
                             if (pointSqDis < minPointSqDis2) {
                                 minPointSqDis2 = pointSqDis;
@@ -1143,41 +1102,38 @@ public:
                 pointSearchCornerInd1[i] = closestPointInd;
                 pointSearchCornerInd2[i] = minPointInd2;
             }
-            //edge distance = ld2 계산식
+
             if (pointSearchCornerInd2[i] >= 0) {
-                //두 점, 직선으로 거리 측정
+
                 tripod1 = laserCloudCornerLast->points[pointSearchCornerInd1[i]];
                 tripod2 = laserCloudCornerLast->points[pointSearchCornerInd2[i]];
 
-                float x0 = pointSel.x;//궁금한 점
+                float x0 = pointSel.x;
                 float y0 = pointSel.y;
                 float z0 = pointSel.z;
-                float x1 = tripod1.x;//젤 가까운 점
+                float x1 = tripod1.x;
                 float y1 = tripod1.y;
                 float z1 = tripod1.z;
-                float x2 = tripod2.x;//x1에서 젤 가까운 점 
+                float x2 = tripod2.x;
                 float y2 = tripod2.y;
                 float z2 = tripod2.z;
 
-                //세개의 점 cross product
                 float m11 = ((x0 - x1)*(y0 - y2) - (x0 - x2)*(y0 - y1));
                 float m22 = ((x0 - x1)*(z0 - z2) - (x0 - x2)*(z0 - z1));
                 float m33 = ((y0 - y1)*(z0 - z2) - (y0 - y2)*(z0 - z1));
 
-                //논문에서 edge distance 공식의 분자
                 float a012 = sqrt(m11 * m11  + m22 * m22 + m33 * m33);
-                //논문에서 edge distance 공식의 분모
+
                 float l12 = sqrt((x1 - x2)*(x1 - x2) + (y1 - y2)*(y1 - y2) + (z1 - z2)*(z1 - z2));
-                
-                //coeff와 관련 있지만 의미파악X
+
                 float la =  ((y1 - y2)*m11 + (z1 - z2)*m22) / a012 / l12;
+
                 float lb = -((x1 - x2)*m11 - (z1 - z2)*m33) / a012 / l12;
+
                 float lc = -((x1 - x2)*m22 + (y1 - y2)*m33) / a012 / l12;
 
-                //edge distance
                 float ld2 = a012 / l12;
 
-                //coeff에 관련, 의미파악X
                 float s = 1;
                 if (iterCount >= 5) {
                     s = 1 - 1.8 * fabs(ld2);
@@ -1195,27 +1151,26 @@ public:
             }
         }
     }
-    //plane feature correspondence finding
-    void findCorrespondingSurfFeatures(int iterCount){//0~24까지 25번 반복
+
+    void findCorrespondingSurfFeatures(int iterCount){
 
         int surfPointsFlatNum = surfPointsFlat->points.size();
 
-        for (int i = 0; i < surfPointsFlatNum; i++) {//한 프레임당 surf로 판정된 point의 갯수만큼 반복
-            //점의 위치가 미세하게 변해서 pointSel에 저장됨. 어떻게 바꾸는지는 아직
-            TransformToStart(&surfPointsFlat->points[i], &pointSel);//pointSel는 pointXYZI 타입
+        for (int i = 0; i < surfPointsFlatNum; i++) {
 
-            if (iterCount % 5 == 0) {//0, 5, 10, 15, 20 5번 반복
-                //궁금한 점 point, 검색할 이웃 점의 수 k, 이웃 점들의 결과 인덱스 k_indices(int vector), 이웃 점들의 squared distances(float vector) 결과
+            TransformToStart(&surfPointsFlat->points[i], &pointSel);
+
+            if (iterCount % 5 == 0) {
+
                 kdtreeSurfLast->nearestKSearch(pointSel, 1, pointSearchInd, pointSearchSqDis);
                 int closestPointInd = -1, minPointInd2 = -1, minPointInd3 = -1;
 
-                if (pointSearchSqDis[0] < nearestFeatureSearchSqDist) {//nearestFeatureSearchSqDist=25(이웃 point가 5이하 거리에 있을 때)
-                    closestPointInd = pointSearchInd[0];//가까운 이웃점의 index
+                if (pointSearchSqDis[0] < nearestFeatureSearchSqDist) {
+                    closestPointInd = pointSearchInd[0];
                     int closestPointScan = int(laserCloudSurfLast->points[closestPointInd].intensity);
 
                     float pointSqDis, minPointSqDis2 = nearestFeatureSearchSqDist, minPointSqDis3 = nearestFeatureSearchSqDist;
                     for (int j = closestPointInd + 1; j < surfPointsFlatNum; j++) {
-                        //+방향 제일 가까운 이웃점 index의 intensity+2.5보다 이웃점의 옆의 점의 intensity가 더 크면 for문 끝
                         if (int(laserCloudSurfLast->points[j].intensity) > closestPointScan + 2.5) {
                             break;
                         }
@@ -1227,21 +1182,19 @@ public:
                                      (laserCloudSurfLast->points[j].z - pointSel.z) * 
                                      (laserCloudSurfLast->points[j].z - pointSel.z);
 
-                        //제일 가까운 이웃점 index의 intensity보다 이웃점의 옆의 점의 intensity가 더 작거나 같으면
                         if (int(laserCloudSurfLast->points[j].intensity) <= closestPointScan) {
                             if (pointSqDis < minPointSqDis2) {
                               minPointSqDis2 = pointSqDis;
-                              minPointInd2 = j;//-1에서 index j로 바뀜
+                              minPointInd2 = j;
                             }
-                        } else {//이웃점의 옆의 점의 intensity가 제일 가까운 이웃점 index의 intensity보다 크고 +2.5보다 작을 때
+                        } else {
                             if (pointSqDis < minPointSqDis3) {
                                 minPointSqDis3 = pointSqDis;
-                                minPointInd3 = j;//-1에서 index j로 바뀜
+                                minPointInd3 = j;
                             }
                         }
                     }
                     for (int j = closestPointInd - 1; j >= 0; j--) {
-                        //- 방향 제일 가까운 이웃점 index의 intensity-2.5보다 이웃점의 옆의 점의 intensity가 더 작으면 for문 끝
                         if (int(laserCloudSurfLast->points[j].intensity) < closestPointScan - 2.5) {
                             break;
                         }
@@ -1253,58 +1206,50 @@ public:
                                      (laserCloudSurfLast->points[j].z - pointSel.z) * 
                                      (laserCloudSurfLast->points[j].z - pointSel.z);
 
-                        //제일 가까운 이웃점 index의 intensity보다 이웃점의 옆의 점의 intensity가 더 크거나 같으면
                         if (int(laserCloudSurfLast->points[j].intensity) >= closestPointScan) {
                             if (pointSqDis < minPointSqDis2) {
                                 minPointSqDis2 = pointSqDis;
-                                minPointInd2 = j;//-1에서 index j로 바뀜
+                                minPointInd2 = j;
                             }
-                        } else {//이웃점의 옆의 점의 intensity가 제일 가까운 이웃점 index의 intensity보다 작고 +2.5보다 클 때
+                        } else {
                             if (pointSqDis < minPointSqDis3) {
                                 minPointSqDis3 = pointSqDis;
-                                minPointInd3 = j;//-1에서 index j로 바뀜
+                                minPointInd3 = j;
                             }
                         }
                     }
                 }
 
-                pointSearchSurfInd1[i] = closestPointInd;//가까운점index
-                pointSearchSurfInd2[i] = minPointInd2;//가까운 점의 + or - 방향 이웃점의 index(Ind1과 가장 가까운점)
+                pointSearchSurfInd1[i] = closestPointInd;
+                pointSearchSurfInd2[i] = minPointInd2;
                 pointSearchSurfInd3[i] = minPointInd3;
             }
-            //palanar distance pd2(점과 평면사이 거리) 계산시작
-            //pointSearchSurfInd3가 0(초기 -1)이상이라는 것은 가까운 이웃점의 index가 들어왔다는 뜻
+
             if (pointSearchSurfInd2[i] >= 0 && pointSearchSurfInd3[i] >= 0) {
-                //3점으로 삼각형이 만들어짐(즉, 평면)
+
                 tripod1 = laserCloudSurfLast->points[pointSearchSurfInd1[i]];
                 tripod2 = laserCloudSurfLast->points[pointSearchSurfInd2[i]];
                 tripod3 = laserCloudSurfLast->points[pointSearchSurfInd3[i]];
 
-                //cross product 후 식
                 float pa = (tripod2.y - tripod1.y) * (tripod3.z - tripod1.z) 
                          - (tripod3.y - tripod1.y) * (tripod2.z - tripod1.z);
                 float pb = (tripod2.z - tripod1.z) * (tripod3.x - tripod1.x) 
                          - (tripod3.z - tripod1.z) * (tripod2.x - tripod1.x);
                 float pc = (tripod2.x - tripod1.x) * (tripod3.y - tripod1.y) 
                          - (tripod3.x - tripod1.x) * (tripod2.y - tripod1.y);
-                //pa, pb, pc와 점 하나를 가지고 평면방정식의 d를 구할 수 있음.
                 float pd = -(pa * tripod1.x + pb * tripod1.y + pc * tripod1.z);
 
-                //노말벡터 구하기
                 float ps = sqrt(pa * pa + pb * pb + pc * pc);
+
                 pa /= ps;
                 pb /= ps;
                 pc /= ps;
                 pd /= ps;
 
-                //평면 방정식 ax+by+cz+d=0
-                //평면 방정식에 구하고 싶은 포인트 x,y,z 대입
                 float pd2 = pa * pointSel.x + pb * pointSel.y + pc * pointSel.z + pd;
 
-                //계수?
                 float s = 1;
                 if (iterCount >= 5) {
-                    //fabs = float의 절대가ㅄ
                     s = 1 - 1.8 * fabs(pd2) / sqrt(sqrt(pointSel.x * pointSel.x
                             + pointSel.y * pointSel.y + pointSel.z * pointSel.z));
                 }
@@ -1316,45 +1261,41 @@ public:
                     coeff.intensity = s * pd2;
 
                     laserCloudOri->push_back(surfPointsFlat->points[i]);
-                    coeffSel->push_back(coeff);//어디서 쓰이는지 볼것★★★★★★★
+                    coeffSel->push_back(coeff);
                 }
             }
         }
     }
-    //정확한 surf transformation 계산
+
     bool calculateTransformationSurf(int iterCount){
 
-        int pointSelNum = laserCloudOri->points.size();//surfPointsFlat point수
+        int pointSelNum = laserCloudOri->points.size();
 
-        cv::Mat matA  (pointSelNum, 3,           CV_32F, cv::Scalar::all(0));
-        cv::Mat matAt (3,           pointSelNum, CV_32F, cv::Scalar::all(0));
-        cv::Mat matAtA(3,           3,           CV_32F, cv::Scalar::all(0));
-        cv::Mat matB  (pointSelNum, 1,           CV_32F, cv::Scalar::all(0));
-        cv::Mat matAtB(3,           1,           CV_32F, cv::Scalar::all(0));
-        cv::Mat matX  (3,           1,           CV_32F, cv::Scalar::all(0));
+        cv::Mat matA(pointSelNum, 3, CV_32F, cv::Scalar::all(0));
+        cv::Mat matAt(3, pointSelNum, CV_32F, cv::Scalar::all(0));
+        cv::Mat matAtA(3, 3, CV_32F, cv::Scalar::all(0));
+        cv::Mat matB(pointSelNum, 1, CV_32F, cv::Scalar::all(0));
+        cv::Mat matAtB(3, 1, CV_32F, cv::Scalar::all(0));
+        cv::Mat matX(3, 1, CV_32F, cv::Scalar::all(0));
 
-        //srx = sine rotation x, tx = translation x
-        float srx = sin(transformCur[0]);//처음 imu DATA들어왔을 때 -imuAngularFromStartY
+        float srx = sin(transformCur[0]);
         float crx = cos(transformCur[0]);
-        float sry = sin(transformCur[1]);//처음 imu DATA들어왔을 때 -imuAngularFromStartZ
+        float sry = sin(transformCur[1]);
         float cry = cos(transformCur[1]);
-        float srz = sin(transformCur[2]);//처음 imu DATA들어왔을 때 -imuAngularFromStartX
+        float srz = sin(transformCur[2]);
         float crz = cos(transformCur[2]);
-        //들어온 imu data가 처음이 아닐 때 transformCur[3] -= imuVeloFromStartX * scanPeriod;
         float tx = transformCur[3];
-        float ty = transformCur[4];//ransformCur[4] -= imuVeloFromStartY * scanPeriod;
-        float tz = transformCur[5];//ransformCur[5] -= imuVeloFromStartZ * scanPeriod;
+        float ty = transformCur[4];
+        float tz = transformCur[5];
 
-        float a1 = crx*sry*srz; float a2 = crx*crz*sry; float a3 = srx*sry; 
-        float a4 = tx*a1 - ty*a2 - tz*a3; float a5 = srx*srz; float a6 = crz*srx; 
-        float a7 = ty*a6 - tz*crx - tx*a5; float a8 = crx*cry*srz; float a9 = crx*cry*crz; 
-        float a10 = cry*srx; float a11 = tz*a10 + ty*a9 - tx*a8;
+        float a1 = crx*sry*srz; float a2 = crx*crz*sry; float a3 = srx*sry; float a4 = tx*a1 - ty*a2 - tz*a3;
+        float a5 = srx*srz; float a6 = crz*srx; float a7 = ty*a6 - tz*crx - tx*a5;
+        float a8 = crx*cry*srz; float a9 = crx*cry*crz; float a10 = cry*srx; float a11 = tz*a10 + ty*a9 - tx*a8;
 
         float b1 = -crz*sry - cry*srx*srz; float b2 = cry*crz*srx - sry*srz;
         float b5 = cry*crz - srx*sry*srz; float b6 = cry*srz + crz*srx*sry;
 
-        float c1 = -b6; float c2 = b5; float c3 = tx*b6 - ty*b5; 
-        float c4 = -crx*crz; float c5 = crx*srz; float c6 = ty*c5 + tx*-c4;
+        float c1 = -b6; float c2 = b5; float c3 = tx*b6 - ty*b5; float c4 = -crx*crz; float c5 = crx*srz; float c6 = ty*c5 + tx*-c4;
         float c7 = b2; float c8 = -b1; float c9 = tx*-b2 - ty*-b1;
 
         for (int i = 0; i < pointSelNum; i++) {
@@ -1435,7 +1376,6 @@ public:
         return true;
     }
 
-    //정��한 corner transformation 계산
     bool calculateTransformationCorner(int iterCount){
 
         int pointSelNum = laserCloudOri->points.size();
@@ -1672,7 +1612,6 @@ public:
         surfPointsLessFlat = laserCloudSurfLast;
         laserCloudSurfLast = laserCloudTemp;
 
-        //setInputCloud : kdtree 오브젝트 생성
         kdtreeCornerLast->setInputCloud(laserCloudCornerLast);
         kdtreeSurfLast->setInputCloud(laserCloudSurfLast);
 
@@ -1711,14 +1650,12 @@ public:
         imuVeloFromStartY = imuVeloFromStartYCur;
         imuVeloFromStartZ = imuVeloFromStartZCur;
 
-        //첫번 째 imu data가 들어왔을 때 가ㅄ들
         if (imuAngularFromStartX != 0 || imuAngularFromStartY != 0 || imuAngularFromStartZ != 0){
             transformCur[0] = - imuAngularFromStartY;
             transformCur[1] = - imuAngularFromStartZ;
             transformCur[2] = - imuAngularFromStartX;
         }
         
-        //imu data가 첫번 째가 아닐 때 들어와 계산되어진 가ㅄ들
         if (imuVeloFromStartX != 0 || imuVeloFromStartY != 0 || imuVeloFromStartZ != 0){
             transformCur[3] -= imuVeloFromStartX * scanPeriod;
             transformCur[4] -= imuVeloFromStartY * scanPeriod;
@@ -1728,10 +1665,8 @@ public:
 
     void updateTransformation(){
 
-        //laserCloudCornerLastNum는 extractfeature에서 corner추출 할때 사용된 프레임마다 포인트들의 합
-        //laserCloudSurfLastNum는 extractfeature에서 평면이고 곡률은 측정되었지만 edge로 판정되지 못한 포인트들->후에 downSizeFileter가 적용된 점들의 프레임마다의 합
         if (laserCloudCornerLastNum < 10 || laserCloudSurfLastNum < 100)
-            return;//포인트가 적으면 함수 끝
+            return;
 
         for (int iterCount1 = 0; iterCount1 < 25; iterCount1++) {
             laserCloudOri->clear();
@@ -1739,7 +1674,7 @@ public:
 
             findCorrespondingSurfFeatures(iterCount1);
 
-            if (laserCloudOri->points.size() < 10)//segmented surf point가 10개 이하일때
+            if (laserCloudOri->points.size() < 10)
                 continue;
             if (calculateTransformationSurf(iterCount1) == false)
                 break;
@@ -1752,18 +1687,15 @@ public:
 
             findCorrespondingCornerFeatures(iterCount2);
 
-            if (laserCloudOri->points.size() < 10)//segmented corner point가 10개 이하일때
+            if (laserCloudOri->points.size() < 10)
                 continue;
             if (calculateTransformationCorner(iterCount2) == false)
                 break;
         }
     }
-    //pose update를 통해 IMU 통합
+
     void integrateTransformation(){
-        //transformSum은 IMU변화량의 축적 data(0 pitch, 1 yaw, 2 roll)
-        //transformCur은 현재 IMU data
         float rx, ry, rz, tx, ty, tz;
-        //accumulateRotation은 local coordinate를 global coordinate로 변환
         AccumulateRotation(transformSum[0], transformSum[1], transformSum[2], 
                            -transformCur[0], -transformCur[1], -transformCur[2], rx, ry, rz);
 
@@ -1780,7 +1712,7 @@ public:
         tx = transformSum[3] - (cos(ry) * x2 + sin(ry) * z2);
         ty = transformSum[4] - y2;
         tz = transformSum[5] - (-sin(ry) * x2 + cos(ry) * z2);
-        //들어오는 현재 IMU data pose update
+
         PluginIMURotation(rx, ry, rz, imuPitchStart, imuYawStart, imuRollStart, 
                           imuPitchLast, imuYawLast, imuRollLast, rx, ry, rz);
 
@@ -1791,7 +1723,7 @@ public:
         transformSum[4] = ty;
         transformSum[5] = tz;
     }
-    //quaternion 변환 후 odometry, transform update
+
     void publishOdometry(){
         geometry_msgs::Quaternion geoQuat = tf::createQuaternionMsgFromRollPitchYaw(transformSum[2], -transformSum[0], -transformSum[1]);
 
@@ -1806,11 +1738,8 @@ public:
         pubLaserOdometry.publish(laserOdometry);
 
         laserOdometryTrans.stamp_ = cloudHeader.stamp;
-        //setRotation : 회전 정보 저장
         laserOdometryTrans.setRotation(tf::Quaternion(-geoQuat.y, -geoQuat.z, geoQuat.x, geoQuat.w));
-        //setOrigin : 이동 정보 저장
         laserOdometryTrans.setOrigin(tf::Vector3(transformSum[3], transformSum[4], transformSum[5]));
-        //StampedTransform을 보냄. 이 data에는 frame_id, time, parent_id가 포함되어 있음.
         tfBroadcaster.sendTransform(laserOdometryTrans);
     }
 
@@ -1833,13 +1762,13 @@ public:
 
         int cornerPointsLessSharpNum = cornerPointsLessSharp->points.size();
         for (int i = 0; i < cornerPointsLessSharpNum; i++) {
-            //TransformToEnd(&cornerPointsLessSharp->points[i], &cornerPointsLessSharp->points[i]);
+            TransformToEnd(&cornerPointsLessSharp->points[i], &cornerPointsLessSharp->points[i]);
         }
 
 
         int surfPointsLessFlatNum = surfPointsLessFlat->points.size();
         for (int i = 0; i < surfPointsLessFlatNum; i++) {
-            //TransformToEnd(&surfPointsLessFlat->points[i], &surfPointsLessFlat->points[i]);
+            TransformToEnd(&surfPointsLessFlat->points[i], &surfPointsLessFlat->points[i]);
         }
 
         pcl::PointCloud<PointType>::Ptr laserCloudTemp = cornerPointsLessSharp;
@@ -1911,7 +1840,7 @@ public:
 
         publishCloud(); // cloud for visualization
 	
-        /** 
+        /**
 		2. Feature Association
         */
         if (!systemInitedLM) {

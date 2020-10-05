@@ -207,6 +207,11 @@ cluster_df[cluster_df["Group"] == -1]=sub_cluster_df
 
 >> 차선 rviz에 뿌리기, 슬램 결과 포인트 클라우드 이용??  
 >> gpu 사용여부 확인, 성능비교할때는 시간측정해서 자료 준비, 각각의 단계별로 이미지사진 준비 
+<<<<<<< HEAD
+<<<<<<< HEAD
+<<<<<<< HEAD
+<<<<<<< HEAD
+<<<<<<< HEAD
 
 ## 1005 
 + change clustering algorithm  
@@ -223,4 +228,22 @@ scikit learn 클러스터링 알고리즘 중 클러스터 수를 인자로 받�
 ![OPTICS](https://user-images.githubusercontent.com/44723287/95050052-e3163580-0725-11eb-946c-15fbc67aba5c.png)
 
 
++ line fitting algorithm
 
+1. using distance  
+![distanceline](https://user-images.githubusercontent.com/44723287/95052539-122ea600-072a-11eb-866d-4d2fdce76ffe.png)  
+
+2. using ransac   
+![ransacline](https://user-images.githubusercontent.com/44723287/95052620-37231900-072a-11eb-808d-5f61e68a276b.png)
+
+
+=======
+>>>>>>> parent of baffb3e... Update READ_ME.md
+=======
+>>>>>>> parent of baffb3e... Update READ_ME.md
+=======
+>>>>>>> parent of baffb3e... Update READ_ME.md
+=======
+>>>>>>> parent of baffb3e... Update READ_ME.md
+=======
+>>>>>>> parent of baffb3e... Update READ_ME.md
