@@ -207,3 +207,20 @@ cluster_df[cluster_df["Group"] == -1]=sub_cluster_df
 
 >> 차선 rviz에 뿌리기, 슬램 결과 포인트 클라우드 이용??  
 >> gpu 사용여부 확인, 성능비교할때는 시간측정해서 자료 준비, 각각의 단계별로 이미지사진 준비 
+
+## 1005 
++ change clustering algorithm  
+
+scikit learn 클러스터링 알고리즘 중 클러스터 수를 인자로 받지 않는 알고리즘. 인자는 클러스터 수를 비슷하게 맞추는 방향으로 잡았음.  
+  
+1. dbscan 인자: eps=1, min_samples=30 시간:0.35초 클러스터 수:21 결과사진  
+![dbscan](https://user-images.githubusercontent.com/44723287/95050164-0b9e2f80-0726-11eb-81c5-1eea0dae671b.png)
+
+2. Mean-shift 인자: bandwidth=5 시간: 277초 클러스터 수:15  결과사진 
+![image](https://user-images.githubusercontent.com/44723287/95049562-f4ab0d80-0724-11eb-9ac9-8c1974ab04f5.png)
+
+3. OPTICS 인자: min_samples=50 시간: 48초 클러스터 수:19 결과사진  
+![OPTICS](https://user-images.githubusercontent.com/44723287/95050052-e3163580-0725-11eb-946c-15fbc67aba5c.png)
+
+
+
