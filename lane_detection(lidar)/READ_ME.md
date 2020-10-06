@@ -253,12 +253,11 @@ scikit learn 클러스터링 알고리즘 중 클러스터 수를 인자로 받�
 2-1. 두 차선의 각 양 포인트와 임의의 선의 양 포인트의 거리중 최소거리가 임계값 이상이면 삭제   
 2-2. (가정: 점선은 ransaclines의 마지막 부분에 몰려있음.) 인덱스를 마지막 부터 보다가 최소거리가 급격하게 바뀌는 구간의 인덱스를 선정하여 그부분부터 처음부분까지 모두 삭제  
 
-원본:
-![Figure_1-1](https://user-images.githubusercontent.com/44723287/95180858-7e2e0e80-07fd-11eb-9bbd-77cfec00af9a.png)
-1 & 2-1 후
-![Figure_1-1_r](https://user-images.githubusercontent.com/44723287/95180875-82f2c280-07fd-11eb-9860-2fee6212f7b0.png)
-1 & 2-2 후
-![Figure_1-1_r2](https://user-images.githubusercontent.com/44723287/95180885-84bc8600-07fd-11eb-8da2-99c2a471da86.png)
+원본: ![Figure_1-1](https://user-images.githubusercontent.com/44723287/95180858-7e2e0e80-07fd-11eb-9bbd-77cfec00af9a.png)
+
+1 & 2-1 후: ![Figure_1-1_r](https://user-images.githubusercontent.com/44723287/95180875-82f2c280-07fd-11eb-9860-2fee6212f7b0.png)
+
+1 & 2-2 후: ![Figure_1-1_r2](https://user-images.githubusercontent.com/44723287/95180885-84bc8600-07fd-11eb-8da2-99c2a471da86.png)
 
 
 > 좋은 2차선 데이터 선정하기 !!!! 
