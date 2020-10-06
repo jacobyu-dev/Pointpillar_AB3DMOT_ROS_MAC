@@ -1,0 +1,12 @@
+<launch>
+    
+    <!--- Sim Time -->
+    <param name="/use_sim_time" value="true" />
+
+    <!--- Run Rviz-->
+    <node pkg="rviz" type="rviz" name="rviz" args="-d $(find bbox_from_tracklet)/launch/test.rviz" />
+
+    <!--- bbox_from_tracklet -->    
+    <node pkg="bbox_from_tracklet" type="bounding_pubsub.py"    name="bounding_pubsub"    output="screen"/>
+
+</launch>
