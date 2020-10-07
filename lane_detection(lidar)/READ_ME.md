@@ -269,10 +269,10 @@ https://github.com/seo-dev/KCSY/blob/hrkim/pcl_node_rviz(removenoise).py
 https://github.com/seo-dev/KCSY/blob/hrkim/pcl_node_rviz(matplotlib-rviz).py  
 
 + 차선 인식 알고리즘 근본 개선 필요하다고 생각함. 
-+ rviz에 선이 연결되서 나오기 때문에 수정 필요..
-
-+ 개선 방법  
 1. 다른 깃허브 소스: https://github.com/chiragkhandhar/Object-detection-in-Point-Cloud-Lane-Marking    
 2. 클러스터링 결과를 라인이 아닌 포인트로 확인하면서 파라미터 수정  
 ------------------------------------------------------------------------------------------------------------  
 3. road 추출.. ( + image data..)  
+
++ rviz에 선이 연결되서 나오기 때문에 수정 필요..  
+
