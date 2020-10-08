@@ -276,3 +276,11 @@ https://github.com/seo-dev/KCSY/blob/hrkim/pcl_node_rviz(matplotlib-rviz).py
 
 + rviz에 선이 연결되서 나오기 때문에 수정 필요..  
 
+## 1008
+> reference: 어려운 고속도로 환경에서 Lidar를 이용한 안정적이고 정확한 다중 차선 인식 알고리즘  
+  
+- [X] Lego Loam 참고해서 Ground 부분 추출: https://github.com/seo-dev/KCSY/tree/hrkim/ground_ws(아직 하는중..)    
+- [ ] 자차 기준 평행하게 좌우 3.5미터 간격으로 ROI 생성  
+- [ ] RANSAC으로 차선 후보군 생성  
+- [ ] Lane detection  
+- [ ] Tracking   
