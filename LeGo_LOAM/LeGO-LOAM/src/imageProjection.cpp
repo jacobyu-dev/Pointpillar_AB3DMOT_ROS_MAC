@@ -82,12 +82,6 @@ private:
     float endOrientation;
     
     //추가 
-    // float XM[10];
-    // float Xm[10];
-    // float YM[10];
-    // float Ym[10];
-    // float ZM[10];
-    // float Zm[10];
     float h, w, l;
     float tx, ty, tz;
     float *XM;
@@ -170,7 +164,7 @@ public:
         fullCloud->points.resize(N_SCAN*Horizon_SCAN);//28800개
         fullInfoCloud->points.resize(N_SCAN*Horizon_SCAN);
 
-        //assign(원소의 개수, 가ㅄ);
+        //assign(원소의 개수, 값);
         segMsg.startRingIndex.assign(N_SCAN, 0);
         segMsg.endRingIndex.assign(N_SCAN, 0);
 
@@ -179,7 +173,7 @@ public:
         segMsg.segmentedCloudColInd.assign(N_SCAN*Horizon_SCAN, 0);
         segMsg.segmentedCloudRange.assign(N_SCAN*Horizon_SCAN, 0);
 
-        //segmentation process를 위해 구역 나누는듯?
+        //segmentation process를 위해 구역 나누기
         std::pair<int8_t, int8_t> neighbor;
         neighbor.first = -1; neighbor.second =  0; neighborIterator.push_back(neighbor);
         neighbor.first =  0; neighbor.second =  1; neighborIterator.push_back(neighbor);
@@ -205,14 +199,7 @@ public:
         //추가
         groundCloudIntensity->clear();
         laserCloudIn1->clear();
-        // for(int i = 0 ; i<10 ; i++){
-        //     XM[i] = 0;
-        //     Xm[i] = 0;
-        //     YM[i] = 0;
-        //     Ym[i] = 0;
-        //     ZM[i] = 0;
-        //     Zm[i] = 0;
-        // }
+        
         //Matrix초기화
         //CV_32F(32bit floating-point number)
         //CV_8S(8bit signed integer)
@@ -281,8 +268,7 @@ public:
         size_t cloudSize; 
         cloudSize = laserCloudIn1->points.size();
         PointType thisPoint;
-        //ROS_INFO("middle %d", laserCloudIn1->header.seq);
-        //ROS_INFO("boxSize %zu", boxSize);
+
         for (size_t i = 0; i < cloudSize; ++i){
             thisPoint.x = laserCloudIn1->points[i].x;
             thisPoint.y = laserCloudIn1->points[i].y;
@@ -291,14 +277,7 @@ public:
             for(int j=0 ; j < boxSize ; j++){
                 if(Xm[j] < thisPoint.x && thisPoint.x < XM[j]){
                     if(Ym[j] < thisPoint.y && thisPoint.y < YM[j]){
-                        //ROS_INFO("22222 %f %f %f", Xm[i], laserCloudIn1->points[i].x, XM[i]);
                         laserCloudIn1->points[i] = nanPoint;
-                        // laserCloudIn->points[i].x = std::numeric_limits<float>::quiet_NaN();
-                        // laserCloudIn->points[i].y = std::numeric_limits<float>::quiet_NaN();
-                        // laserCloudIn->points[i].z = std::numeric_limits<float>::quiet_NaN();
-                        // laserCloudIn->points[i].intensity = -1;
-                        //ROS_INFO("22222 %f", laserCloudIn1->points[i].x);
-
                         }
                 }//ROS_INFO("if --- %f, %f", thisPoint.x, thisPoint.y);
             }
@@ -306,7 +285,6 @@ public:
         
         std::vector<int> indices;
         pcl::removeNaNFromPointCloud(*laserCloudIn1, *laserCloudIn, indices);
-        //ROS_INFO("333 %zu", laserCloudIn->points.size());
         
 
         //추가
@@ -358,7 +336,7 @@ public:
         // printf("2. startOrientation=%f, endOrientation=%f\n", segMsg.startOrientation* 180.0 / M_PI, segMsg.endOrientation* 180.0 / M_PI);
         segMsg.orientationDiff = segMsg.endOrientation - segMsg.startOrientation;
         // printf("orientationDiff=%f \n\n", (segMsg.endOrientation-segMsg.startOrientation)* 180.0 / M_PI);
-        //segMsg.orientationDiff는 6.58~6.59(377도)로 일정, if문에서 맞춰줌(?)
+        //segMsg.orientationDiff는 6.58~6.59(377도)로 일정, if문에서 맞춰줌
         
     }
 
@@ -414,7 +392,7 @@ public:
             //1보다 작으면 Matrix에 넣지 않음
             if (range < sensorMinimumRange)
                 continue;
-            //해당되는 row 와 column에 range 거리가 대입, 대입되지 않는 곳은 168번 줄에 넣었던 FLT_MAX 가ㅄ.
+            //해당되는 row 와 column에 range 거리가 대입, 대입되지 않는 곳은 168번 줄에 넣었던 FLT_MAX 값.
             rangeMat.at<float>(rowIdn, columnIdn) = range;
             
             //intensity로 00.0000을 표현하는데 정수 부분은 row, 소수 부분은 column 으로 표현
@@ -466,7 +444,7 @@ public:
                 //printf("angle = %f\n\n", angle);
 
                 //extern const float sensorMountAngle = 0.0; in utility.h
-                //보통 -1~1사이 가ㅄ, 10이하는 groundMatrix에 X 
+                //보통 -1~1사이 값, 10이하는 groundMatrix에 X 
                 if (abs(angle - sensorMountAngle) <= 10){
                     groundMat.at<int8_t>(i,j) = 0;
                     groundMat.at<int8_t>(i+1,j) = 0;
@@ -478,7 +456,7 @@ public:
         // note that ground remove is from 0~N_SCAN-1, need rangeMat for mark label matrix for the 16th scan
         for (size_t i = 0; i < N_SCAN; ++i){//16개의 채널
             for (size_t j = 0; j < Horizon_SCAN; ++j){//1800개의 샘플 수 
-                //ground matrix가 ground로 판정 나거나, range matrix에 range가ㅄ이 들어오지 않았을때 
+                //ground matrix가 ground로 판정 나거나, range matrix에 range값이 들어오지 않았을때 
                 if (groundMat.at<int8_t>(i,j) == 1 || rangeMat.at<float>(i,j) == FLT_MAX){
                     labelMat.at<int>(i,j) = -1;//label matrix에 -1대입, reset때 모두 0으로 초기화 했었음
                 }
@@ -516,7 +494,7 @@ public:
                     // outliers that will not be used for optimization (always continue)
                     if (labelMat.at<int>(i,j) == 999999){//FLT_MAX일 때
                         if (i > groundScanInd && j % 5 == 0){//ring이 7보다 위 채널이고, sample이 5의 배수 라면
-                            //j + i*Horizon_SCAN 인덱스에 들어있는 fullCloud가ㅄ을 outlierCloud에 대입
+                            //j + i*Horizon_SCAN 인덱스에 들어있는 fullCloud값을 outlierCloud에 대입
                             outlierCloud->push_back(fullCloud->points[j + i*Horizon_SCAN]);
                             continue;
                         }else{//range 있을 때
