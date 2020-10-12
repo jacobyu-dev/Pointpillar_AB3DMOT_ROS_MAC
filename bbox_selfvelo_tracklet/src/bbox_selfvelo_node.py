@@ -26,24 +26,20 @@ from jsk_rviz_plugins.msg import Pictogram              #sudo apt-get install ro
 from jsk_rviz_plugins.msg import PictogramArray
 
 
-from visualization_msgs.msg import Marker
+from visualization_msgs.msg import Marker, MarkerArray
 
 import std_msgs
 import os.path 
 
 
-TRACKLET_PATH = '/home/jk/data/2011_09_26/2011_09_26_drive_0032_sync/tracklet_labels.xml'
+TRACKLET_PATH = '/home/user/tracklet_labels.xml'
 
 
 #Global Variables
 kitti_data = None
 pictogram_texts = None
+obj_postion_record = {}
 
-pub_boxes = None
-pub_pictograms = None
-
-pub_selfvelo_text = None
-pub_selfveloDirection = None
 
 class MoDetect_N_Track:
     def __init__(self):
@@ -57,8 +53,13 @@ class MoDetect_N_Track:
         self.pub_selfveloDirection = rospy.Publisher('kitti_selfvelo_direction', Marker, queue_size=1)
 
 
+        self.pub_obj_arrow = rospy.Publisher('object_arrow', MarkerArray, queue_size=1)
+        self.pub_obj_velocity = rospy.Publisher('object_velocity', MarkerArray, queue_size=1)
+
+
 
     def callback(self, data):
+        global obj_postion_record
 
         header = data.header     
         frame = header.seq
@@ -69,12 +70,58 @@ class MoDetect_N_Track:
         texts = PictogramArray() #Labels with JSK
         texts.header = header
 
+        arrow = MarkerArray() #arrow with visualization_msgs 
+
+        velocity_marker = MarkerArray() #text with visualization_msgs 
+
+        
 
         if kitti_data.has_key(frame) == True:
             for b in kitti_data[frame]:
                 b.header = header
+
                 boxes.boxes.append(b)
 
+                obj_arrow = Marker(type=Marker.ARROW,
+                                    lifetime=rospy.Duration(0.1),
+                                    id=b.label,
+                                    header=header,
+                                    pose=Pose(b.pose.position, b.pose.orientation),
+                                    scale=Vector3(5.0, 0.5, 0.5),
+                                    color=ColorRGBA(1.0, 0.0, 0.0, 0.8))
+                arrow.markers.append(obj_arrow)
+
+                
+                current_dist = np.sqrt(b.pose.position.x ** 2 + b.pose.position.y ** 2 + b.pose.position.z ** 2)
+
+                # obj_velo =0
+                '''
+                if obj_postion_record.has_key(b.label) == False:
+                    obj_postion_record[b.label]=[b.pose.position]
+                    current_dist = np.sqrt(b.pose.position.x ** 2 + b.pose.position.y ** 2 + b.pose.position.z ** 2)
+                else :
+                    # old_dist = np.sqrt(obj_postion_record[b.label][0].x ** 2 + obj_postion_record[b.label][0].y ** 2 + obj_postion_record[b.label][0].z ** 2)
+                    current_dist = np.sqrt(b.pose.position.x ** 2 + b.pose.position.y ** 2 + b.pose.position.z ** 2)
+                    # obj_velo = np.round_(current_dist,1) - np.round_(old_dist,1)
+
+                    # obj_velo = obj_velo / data.header.
+                    # obj_postion_record[b.label]=[b.pose.position]
+                '''
+
+                text_marker = Marker(
+                                    type=Marker.TEXT_VIEW_FACING,
+                                    id=b.label,
+                                    lifetime=rospy.Duration(0.1),
+                                    pose=Pose(b.pose.position, b.pose.orientation),
+                                    scale=Vector3(1.0, 1.0, 1.0),
+                                    header=header,
+                                    color=ColorRGBA(1.0, 1.0, 1.0, 0.8),
+                                    text="{}m".format(np.round_(current_dist,1)))
+
+                velocity_marker.markers.append(text_marker)
+
+
+        
         if pictogram_texts.has_key(frame) == True:
             for txt in pictogram_texts[frame]:
                 txt.header = header
@@ -82,6 +129,8 @@ class MoDetect_N_Track:
 
         self.pub_boxes.publish(boxes)
         self.pub_pictograms.publish(texts)
+        self.pub_obj_arrow.publish(arrow)
+        self.pub_obj_velocity.publish(velocity_marker)
 
 
     def callback2(self, data):
@@ -98,7 +147,7 @@ class MoDetect_N_Track:
         text_marker = Marker(
                 type=Marker.TEXT_VIEW_FACING,
                 id=0,
-                lifetime=rospy.Duration(1.5),
+                lifetime=rospy.Duration(0.5),
                 pose=Pose(Point(0.0, 0.0, 0.0), Quaternion(0, 0, 0, 1)),
                 scale=Vector3(1.0, 1.0, 1.0),
                 header=header,
@@ -108,7 +157,7 @@ class MoDetect_N_Track:
         arrow_marker = Marker(
                 type=Marker.ARROW,
                 id=0,
-                lifetime=rospy.Duration(1.5),
+                lifetime=rospy.Duration(0.5),
                 pose=Pose(Point(0.0, 0.0, 0.0), Quaternion(*q)),
                 scale=Vector3(5.0, 0.5, 0.5),
                 header=header,
@@ -177,7 +226,7 @@ def readXML(file):
 
 
 def main(args):
-    global pub, pub_pictograms, kitti_data, pictogram_texts
+    global kitti_data, pictogram_texts
 
     #Initializes and cleanup ros node with node name
     rospy.init_node('bbox_selfvelo_node', anonymous=True)
@@ -195,3 +244,4 @@ def main(args):
 
 if __name__ == '__main__':
     main(sys.argv)
+
