@@ -54,9 +54,11 @@ typedef pcl::PointXYZI  PointType;
 //extern const string pointCloudTopic = "/velodyne_points";
 //extern const string imuTopic = "/imu/data";
 
+//add
 //kitti
 extern const string pointCloudTopic = "/kitti/velo/pointcloud";
 extern const string imuTopic = "/kitti/oxts/imu";
+//extern const float boxParameter = 50.0;
 //kitti image topic name /kitti/camera_color_right/image_raw
 
 // Save pcd
@@ -87,7 +89,7 @@ extern const int Horizon_SCAN = 1800;
 extern const float ang_res_x = 0.2;
 extern const float ang_res_y = 0.427;
 extern const float ang_bottom = 24.9;
-extern const int groundScanInd = 45;
+extern const int groundScanInd = 55;
 
 // VLS-128
 // extern const int N_SCAN = 128;

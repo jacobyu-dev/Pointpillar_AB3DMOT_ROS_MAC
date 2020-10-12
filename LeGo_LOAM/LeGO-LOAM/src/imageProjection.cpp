@@ -33,6 +33,7 @@
 //      IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS). October 2018.
 
 #include "utility.h"
+#include "jsk_recognition_msgs/BoundingBoxArray.h"
 
 class ImageProjection{
 private:
@@ -40,6 +41,8 @@ private:
     ros::NodeHandle nh;
 
     ros::Subscriber subLaserCloud;
+    //추가
+    ros::Subscriber subBoundingBoxInfo;
     
     ros::Publisher pubFullCloud;
     ros::Publisher pubFullInfoCloud;
@@ -51,9 +54,11 @@ private:
     ros::Publisher pubOutlierCloud;
     //추가
     ros::Publisher pubGroundCloudIntensity;
+    jsk_recognition_msgs::BoundingBox Box;
 
     //추가
     pcl::PointCloud<PointType>::Ptr groundCloudIntensity;
+    pcl::PointCloud<PointType>::Ptr laserCloudIn1;
 
     pcl::PointCloud<PointType>::Ptr laserCloudIn;
     pcl::PointCloud<PointXYZIR>::Ptr laserCloudInRing;
@@ -76,6 +81,25 @@ private:
     float startOrientation;
     float endOrientation;
     
+    //추가 
+    // float XM[10];
+    // float Xm[10];
+    // float YM[10];
+    // float Ym[10];
+    // float ZM[10];
+    // float Zm[10];
+    float h, w, l;
+    float tx, ty, tz;
+    float *XM;
+    float *Xm;
+    float *YM;
+    float *Ym;
+    float *ZM;
+    float *Zm;
+
+    
+    size_t boxSize;
+
     cloud_msgs::cloud_info segMsg; // info of segmented cloud
     std_msgs::Header cloudHeader;//uint32 seq, time stamp, string frame_id
 
@@ -92,9 +116,12 @@ public:
     ImageProjection():
         nh("~"){
         //구독 ("토픽명", queue size, callback 함수)
+        //추가
+        subBoundingBoxInfo = nh.subscribe<jsk_recognition_msgs::BoundingBoxArray>("/kitti_box", 1, &ImageProjection::boxCallback, this);
+        boxSize = 0;
         //extern const string pointCloudTopic = "/velodyne_points"; in utility.h
         subLaserCloud = nh.subscribe<sensor_msgs::PointCloud2>(pointCloudTopic, 1, &ImageProjection::cloudHandler, this);
-        
+
         //발행 ("토픽명", queue size)
         pubFullCloud = nh.advertise<sensor_msgs::PointCloud2> ("/full_cloud_projected", 1);
         pubFullInfoCloud = nh.advertise<sensor_msgs::PointCloud2> ("/full_cloud_info", 1);
@@ -120,6 +147,13 @@ public:
     void allocateMemory(){
         //추가
         groundCloudIntensity.reset(new pcl::PointCloud<PointType>());
+        laserCloudIn1.reset(new pcl::PointCloud<PointType>());
+        XM = new float[10];
+        Xm = new float[10];
+        YM = new float[10];
+        Ym = new float[10];
+        ZM = new float[10];
+        Zm = new float[10];
 
         laserCloudIn.reset(new pcl::PointCloud<PointType>());
         laserCloudInRing.reset(new pcl::PointCloud<PointXYZIR>());
@@ -170,7 +204,15 @@ public:
         outlierCloud->clear();
         //추가
         groundCloudIntensity->clear();
-
+        laserCloudIn1->clear();
+        // for(int i = 0 ; i<10 ; i++){
+        //     XM[i] = 0;
+        //     Xm[i] = 0;
+        //     YM[i] = 0;
+        //     Ym[i] = 0;
+        //     ZM[i] = 0;
+        //     Zm[i] = 0;
+        // }
         //Matrix초기화
         //CV_32F(32bit floating-point number)
         //CV_8S(8bit signed integer)
@@ -191,22 +233,85 @@ public:
 
     ~ImageProjection(){}
 
+    void boxCallback(const jsk_recognition_msgs::BoundingBoxArray::ConstPtr& BoundingBox){
+        float temp = 2.0;
+        // ROS_INFO("boxCallback start %d", BoundingBox->header.seq);
+        boxSize = BoundingBox->boxes.size();
+
+        for(int i=0 ; i < boxSize ; i++){
+
+            Box = BoundingBox->boxes[i];
+
+            l = Box.dimensions.x;
+            w = Box.dimensions.y;
+            h = Box.dimensions.z;
+
+            tx = Box.pose.position.x;
+            ty = Box.pose.position.y;
+            tz = (Box.pose.position.z)*2;
+            
+            XM[i] = tx + temp*l;
+            Xm[i] = tx - temp*l;
+
+            YM[i] = ty + temp*w;
+            Ym[i] = ty - temp*w;
+
+            ZM[i] = tz + temp*h;
+            Zm[i] = tz - 10*h;
+        }
+        //ROS_INFO("boxCallback end %d", BoundingBox->header.seq);
+
+    }
+
     //velodyne point들을 받아서 함수 실행
     void copyPointCloud(const sensor_msgs::PointCloud2ConstPtr& laserCloudMsg){
 
         cloudHeader = laserCloudMsg->header;
         // //cloudHeader.stamp = ros::Time::now(); // Ouster lidar users may need to uncomment this line
         //lasercloudmsg(sensor msgs를) -> lasercloudin(pcl msgs로), 즉, data 택배 포장지 뜯기
-        pcl::fromROSMsg(*laserCloudMsg, *laserCloudIn);
+        pcl::fromROSMsg(*laserCloudMsg, *laserCloudIn1);
         //추가
         pcl::fromROSMsg(*laserCloudMsg, *groundCloudIntensity);
         // Remove Nan points
-        std::vector<int> indices;
         //pcl::removeNaNFromPointCloud(input point cloud, output point cloud, vector)
         //revomes points with x,y,z equal to NaN.
-        pcl::removeNaNFromPointCloud(*laserCloudIn, *laserCloudIn, indices);
+        //ROS_INFO("111 %zu", laserCloudIn1->points.size());
+        //pcl::removeNaNFromPointCloud(*laserCloudIn1, *laserCloudIn, indices);
         //추가
-        pcl::removeNaNFromPointCloud(*groundCloudIntensity, *groundCloudIntensity, indices);
+        size_t cloudSize; 
+        cloudSize = laserCloudIn1->points.size();
+        PointType thisPoint;
+        //ROS_INFO("middle %d", laserCloudIn1->header.seq);
+        //ROS_INFO("boxSize %zu", boxSize);
+        for (size_t i = 0; i < cloudSize; ++i){
+            thisPoint.x = laserCloudIn1->points[i].x;
+            thisPoint.y = laserCloudIn1->points[i].y;
+            thisPoint.z = laserCloudIn1->points[i].z;
+            //ROS_INFO("if +++ %f, %f", thisPoint.x, thisPoint.y);
+            for(int j=0 ; j < boxSize ; j++){
+                if(Xm[j] < thisPoint.x && thisPoint.x < XM[j]){
+                    if(Ym[j] < thisPoint.y && thisPoint.y < YM[j]){
+                        //ROS_INFO("22222 %f %f %f", Xm[i], laserCloudIn1->points[i].x, XM[i]);
+                        laserCloudIn1->points[i] = nanPoint;
+                        // laserCloudIn->points[i].x = std::numeric_limits<float>::quiet_NaN();
+                        // laserCloudIn->points[i].y = std::numeric_limits<float>::quiet_NaN();
+                        // laserCloudIn->points[i].z = std::numeric_limits<float>::quiet_NaN();
+                        // laserCloudIn->points[i].intensity = -1;
+                        //ROS_INFO("22222 %f", laserCloudIn1->points[i].x);
+
+                        }
+                }//ROS_INFO("if --- %f, %f", thisPoint.x, thisPoint.y);
+            }
+        }
+        
+        std::vector<int> indices;
+        pcl::removeNaNFromPointCloud(*laserCloudIn1, *laserCloudIn, indices);
+        //ROS_INFO("333 %zu", laserCloudIn->points.size());
+        
+
+        //추가
+        std::vector<int> indices1;
+        pcl::removeNaNFromPointCloud(*groundCloudIntensity, *groundCloudIntensity, indices1);
         
         // have "ring" channel in the cloud
         //extern const bool useCloudRing = true;
@@ -219,9 +324,9 @@ public:
             }  
         }
     }
-    
+
     void cloudHandler(const sensor_msgs::PointCloud2ConstPtr& laserCloudMsg){//velodyne point들 받기
-        
+        // ROS_INFO("cloudHandler start %d", laserCloudMsg->header.seq);
         // 1. Convert ros message to pcl point cloud
         copyPointCloud(laserCloudMsg);
         // 2. Start and end angle of a scan
@@ -236,6 +341,7 @@ public:
         publishCloud();
         // 7. Reset parameters for next iteration
         resetParameters();
+        // ROS_INFO("cloudHandler end %d", laserCloudMsg->header.seq);
     }
 
     void findStartEndAngle(){
@@ -259,11 +365,11 @@ public:
     void projectPointCloud(){
         // range image projection
         // intensity를 구하고 XYZI 정보를 fullcloud에 넣는 함수 + rangeMat에 포인트별 거리 넣는 함수
-        float verticalAngle, horizonAngle, range;//temp추가
+        float verticalAngle, horizonAngle, range;
         size_t rowIdn, columnIdn, index, cloudSize; 
         PointType thisPoint;//pcl::pointXYZI
 
-        cloudSize = laserCloudIn->points.size();//★크기 궁금
+        cloudSize = laserCloudIn->points.size();
         
         for (size_t i = 0; i < cloudSize; ++i){
             thisPoint.x = laserCloudIn->points[i].x;
@@ -362,8 +468,8 @@ public:
                 //extern const float sensorMountAngle = 0.0; in utility.h
                 //보통 -1~1사이 가ㅄ, 10이하는 groundMatrix에 X 
                 if (abs(angle - sensorMountAngle) <= 10){
-                    groundMat.at<int8_t>(i,j) = 1;
-                    groundMat.at<int8_t>(i+1,j) = 1;
+                    groundMat.at<int8_t>(i,j) = 0;
+                    groundMat.at<int8_t>(i+1,j) = 0;
                 }
             }
         }
