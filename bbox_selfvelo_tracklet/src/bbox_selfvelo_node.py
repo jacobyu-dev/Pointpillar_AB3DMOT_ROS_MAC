@@ -160,7 +160,7 @@ def readXML(file):
             picto_text.pose.orientation = Quaternion(0.0, -0.5, 0.0, 0.5)
             picto_text.size = 5
             picto_text.color = std_msgs.msg.ColorRGBA(1, 1, 1, 1)
-            picto_text.character = label
+            picto_text.character = label + "\n" + str(b.label)
             
 
             if d.has_key(frame + j) == True:
