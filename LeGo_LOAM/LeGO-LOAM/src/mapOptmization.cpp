@@ -72,6 +72,10 @@ private:
     ros::Publisher pubIcpKeyFrames;
     ros::Publisher pubRecentKeyFrames;
     ros::Publisher pubRegisteredCloud;
+    //추가
+    ros::Subscriber subGroundCloudIntensity2;
+    ros::Publisher pubGroundCloudIntensity2;
+    pcl::PointCloud<PointType>::Ptr GroundCloudIntensity3;
 
     //Subscriber를 통해 sub노드 만들기
     ros::Subscriber subLaserCloudCornerLast;
@@ -238,7 +242,11 @@ public:
         //publish also key_pose_origin
         pubKeyPoses = nh.advertise<sensor_msgs::PointCloud2>("/key_pose_origin", 2);
         pubLaserCloudSurround = nh.advertise<sensor_msgs::PointCloud2>("/laser_cloud_surround", 2);
+        //해린이가 가져가알 것
         pubOdomAftMapped = nh.advertise<nav_msgs::Odometry> ("/aft_mapped_to_init", 5);
+        //추가
+        subGroundCloudIntensity2 = nh.subscribe<sensor_msgs::PointCloud2>("/ground_cloud_intensity1", 1, &mapOptimization::subGroundCloudIntensity, this);
+        pubGroundCloudIntensity2 = nh.advertise<sensor_msgs::PointCloud2>("/ground_cloud_intensity2", 1);
 
         //subscribe below 4 topic from featureAssociation
         subLaserCloudCornerLast = nh.subscribe<sensor_msgs::PointCloud2>("/laser_cloud_corner_last", 2, &mapOptimization::laserCloudCornerLastHandler, this);
@@ -273,6 +281,9 @@ public:
     }
 
     void allocateMemory(){
+        //추가
+        GroundCloudIntensity3.reset(new pcl::PointCloud<PointType>());
+
 
         cloudKeyPoses3D.reset(new pcl::PointCloud<PointType>());
         cloudKeyPoses6D.reset(new pcl::PointCloud<PointTypePose>());
@@ -523,6 +534,7 @@ public:
         tX = transformTobeMapped[3];
         tY = transformTobeMapped[4];
         tZ = transformTobeMapped[5];
+        ROS_INFO("%f", tZ);
     }
 
     //
@@ -634,6 +646,12 @@ public:
         pcl::fromROSMsg(*msg, *laserCloudCornerLast);
         newLaserCloudCornerLast = true;
     }
+    //추가
+    void subGroundCloudIntensity(const sensor_msgs::PointCloud2ConstPtr& msg){
+
+        GroundCloudIntensity3->clear();
+        pcl::fromROSMsg(*msg, *GroundCloudIntensity3);
+    }
 
     void laserCloudSurfLastHandler(const sensor_msgs::PointCloud2ConstPtr& msg){
         timeLaserCloudSurfLast = msg->header.stamp.toSec();
@@ -696,6 +714,12 @@ public:
         odomAftMapped.twist.twist.linear.z = transformBefMapped[5];
         pubOdomAftMapped.publish(odomAftMapped);
 
+
+        sensor_msgs::PointCloud2 cloudMsgTemp;
+        pcl::toROSMsg(*GroundCloudIntensity3, cloudMsgTemp);
+        cloudMsgTemp.header.frame_id = "/base_link";
+        pubGroundCloudIntensity2.publish(cloudMsgTemp);
+
         aftMappedTrans.stamp_ = ros::Time().fromSec(timeLaserOdometry);
         //setRotation : 회전 정보 저장
         aftMappedTrans.setRotation(tf::Quaternion(-geoQuat.y, -geoQuat.z, geoQuat.x, geoQuat.w));
@@ -717,7 +741,7 @@ public:
     }
 
     void publishKeyPosesAndFrames(){
-
+        
         if (pubKeyPoses.getNumSubscribers() != 0){
             sensor_msgs::PointCloud2 cloudMsgTemp;
             pcl::toROSMsg(*cloudKeyPoses3D, cloudMsgTemp);
@@ -746,6 +770,7 @@ public:
             cloudMsgTemp.header.frame_id = "/camera_init";
             pubRegisteredCloud.publish(cloudMsgTemp);
         } 
+        
     }
 
     void visualizeGlobalMapThread(){
@@ -754,6 +779,7 @@ public:
             rate.sleep();
             publishGlobalMap();
         }
+
         // save final point cloud
         pcl::io::savePCDFileASCII(fileDirectory+"finalCloud.pcd", *globalMapKeyFramesDS);
 
@@ -776,7 +802,6 @@ public:
         downSizeFilterCorner.filter(*cornerMapCloudDS);
         downSizeFilterSurf.setInputCloud(surfaceMapCloud);
         downSizeFilterSurf.filter(*surfaceMapCloudDS);
-
         pcl::io::savePCDFileASCII(fileDirectory+"cornerMap.pcd", *cornerMapCloudDS);
         pcl::io::savePCDFileASCII(fileDirectory+"surfaceMap.pcd", *surfaceMapCloudDS);
         pcl::io::savePCDFileASCII(fileDirectory+"trajectory.pcd", *cloudKeyPoses3D);
@@ -1532,7 +1557,6 @@ public:
             cloudKeyPoses6D->points[i].pitch = isamCurrentEstimate.at<Pose3>(i).rotation().yaw();
             cloudKeyPoses6D->points[i].yaw   = isamCurrentEstimate.at<Pose3>(i).rotation().roll();
             }
-
             aLoopIsClosed = false;
         }
     }

@@ -49,6 +49,10 @@ private:
     ros::Publisher pubCornerPointsLessSharp;
     ros::Publisher pubSurfPointsFlat;
     ros::Publisher pubSurfPointsLessFlat;
+    //추가
+    ros::Subscriber subGroundCloudIntensity1;
+    ros::Publisher pubGroundCloudIntensity1;
+    pcl::PointCloud<PointType>::Ptr GroundCloudIntensity1;
 
     pcl::PointCloud<PointType>::Ptr segmentedCloud;
     pcl::PointCloud<PointType>::Ptr outlierCloud;
@@ -191,6 +195,9 @@ public:
         subLaserCloudInfo = nh.subscribe<cloud_msgs::cloud_info>("/segmented_cloud_info", 1, &FeatureAssociation::laserCloudInfoHandler, this);
         subOutlierCloud = nh.subscribe<sensor_msgs::PointCloud2>("/outlier_cloud", 1, &FeatureAssociation::outlierCloudHandler, this);
         subImu = nh.subscribe<sensor_msgs::Imu>(imuTopic, 50, &FeatureAssociation::imuHandler, this);
+        //추가
+        subGroundCloudIntensity1 = nh.subscribe<sensor_msgs::PointCloud2>("/ground_cloud_intensity", 1, &FeatureAssociation::pubGroundCloudIntensity, this);
+        pubGroundCloudIntensity1 = nh.advertise<sensor_msgs::PointCloud2>("/ground_cloud_intensity1", 1);
 
         pubCornerPointsSharp = nh.advertise<sensor_msgs::PointCloud2>("/laser_cloud_sharp", 1);
         pubCornerPointsLessSharp = nh.advertise<sensor_msgs::PointCloud2>("/laser_cloud_less_sharp", 1);
@@ -226,6 +233,8 @@ public:
 
         segmentedCloud.reset(new pcl::PointCloud<PointType>());
         outlierCloud.reset(new pcl::PointCloud<PointType>());
+        //추가
+        GroundCloudIntensity1.reset(new pcl::PointCloud<PointType>());
 
         cornerPointsSharp.reset(new pcl::PointCloud<PointType>());
         cornerPointsLessSharp.reset(new pcl::PointCloud<PointType>());
@@ -482,6 +491,14 @@ public:
         pcl::fromROSMsg(*msgIn, *outlierCloud);
 
         newOutlierCloud = true;
+    }
+
+    //추가
+    void pubGroundCloudIntensity(const sensor_msgs::PointCloud2ConstPtr& msgIn){
+
+        GroundCloudIntensity1->clear();
+        pcl::fromROSMsg(*msgIn, *GroundCloudIntensity1);
+
     }
 
     //"segmented_cloud_info" topic받아서 "segInfo"라는 pcl msgs로 변환
@@ -819,6 +836,14 @@ public:
     void publishCloud()
     {
         sensor_msgs::PointCloud2 laserCloudOutMsg;
+
+        //추가
+        if (pubGroundCloudIntensity1.getNumSubscribers() != 0){
+	        pcl::toROSMsg(*GroundCloudIntensity1, laserCloudOutMsg);
+	        laserCloudOutMsg.header.stamp = cloudHeader.stamp;
+	        laserCloudOutMsg.header.frame_id = "/base_link";
+	        pubGroundCloudIntensity1.publish(laserCloudOutMsg);
+	    }
 
 	    if (pubCornerPointsSharp.getNumSubscribers() != 0){
 	        pcl::toROSMsg(*cornerPointsSharp, laserCloudOutMsg);
