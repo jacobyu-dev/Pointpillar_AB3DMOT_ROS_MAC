@@ -284,3 +284,115 @@ https://github.com/seo-dev/KCSY/blob/hrkim/pcl_node_rviz(matplotlib-rviz).py
 - [ ] RANSAC으로 차선 후보군 생성  
 - [ ] Lane detection  
 - [ ] Tracking   
+
+## 1016
+```
+for index in range(0,188):
+    data=[]
+    try:
+        with open('./output_{}.txt'.format(index)) as f:
+            line = f.readline()
+            while line:
+                d=line.split()
+                tmp=[]
+                for i in d:
+                    tmp.append(float(i)) # convert string to float
+                data.append(tmp)
+                line=f.readline()
+    except:
+        continue
+         
+    a=np.array(data)
+
+    ### assumption: There's no void space line in txt file.
+    ### intensity: 0~255
+    pointcloud_df = pd.DataFrame()
+    pointcloud_df["Latitude"] = a[:,0]
+    pointcloud_df["Longitude"] = a[:,1]
+    pointcloud_df["Altitude"] = a[:,2]
+    i = a[:,3]*255
+    ii=[]
+    for x in i:
+        ii.append(int(x))
+    pointcloud_df["Intensity"] = ii
+
+    def convert_fuse(pointcloud_df, min_x = 0.0, min_y = 0.0, min_z = 0.0):
+        pointcloud_df["Latitude"] = pd.to_numeric(pointcloud_df["Latitude"])
+        pointcloud_df["Longitude"] = pd.to_numeric(pointcloud_df["Longitude"])
+        pointcloud_df["Altitude"] = pd.to_numeric(pointcloud_df["Altitude"])
+        pointcloud_df["Intensity"] = pd.to_numeric(pointcloud_df["Intensity"])
+
+        pointcloud_df["Easting"] = pointcloud_df["Latitude"]
+        pointcloud_df["Northing"] = pointcloud_df["Longitude"]
+        return pointcloud_df, (min_x, min_y, min_z), (zone_number, zone_letter)
+
+    pointcloud_df["Easting"] = pointcloud_df["Latitude"]
+    pointcloud_df["Northing"] = pointcloud_df["Longitude"]
+    xyzi_df = pointcloud_df[["Easting", "Northing", "Altitude", "Intensity"]]
+
+    def filter_by_mean_value(pointcloud_df):
+
+        mean = pointcloud_df["Intensity"].mean()
+        std = pointcloud_df["Intensity"].std()
+
+        lanes_df = pointcloud_df[pointcloud_df["Intensity"] > mean + 1 * std]
+        lanes_df = lanes_df[lanes_df["Intensity"] < mean + 7 * std ]
+
+        return lanes_df
+
+    lanes_df = xyzi_df.copy()
+    lanes_df = filter_by_mean_value(lanes_df)
+    b = np.array(lanes_df)
+    bb = np.vstack((b[:,0], b[:,1],b[:,2]))
+    bb= bb.T
+    write_pointcloud("./2original_lane_{}.ply".format(index),bb)
+    
+    X = lanes_df[["Easting", "Northing", "Altitude"]].values
+    Easting=[]
+    Northing=[]
+    group=[]
+    for i in X:
+        if i[1]>9 and i[1]<11:
+            Easting.append(i[0])
+            Northing.append(i[1])
+            group.append(1)
+        elif i[1]>-3 and i[1]<3:
+            Easting.append(i[0])
+            Northing.append(i[1])
+            group.append(2)
+        elif i[1]>-5 and i[1]<-15:
+            Easting.append(i[0])
+            Northing.append(i[1])
+            group.append(3)
+            
+    cluster_df2=pd.DataFrame({"Easting":Easting,"Northing":Northing,"group":group})      
+    print(cluster_df2.head())
+    b = np.array(cluster_df2)
+    bb = np.vstack((b[:,0], b[:,1],b[:,2]))
+    bb= bb.T
+    write_pointcloud("./2original_cluster_{}.ply".format(index),bb)
+
+    ransac = linear_model.RANSACRegressor()
+    ransaclines = []
+
+    for cluster in range(1,4):
+        sub_cluster_df = cluster_df2[cluster_df2["group"] == cluster]
+        try:
+            Xpoints = sub_cluster_df[["Easting"]].values
+            Ypoints = sub_cluster_df[["Northing"]].values
+            print("Xpoints: ",Xpoints)
+            print("Ypoints: ",Ypoints)
+            ransac.fit(Xpoints, Ypoints)
+            line_X = np.arange(Xpoints.min(), Xpoints.max())[:, np.newaxis]
+            line_y_ransac = ransac.predict(line_X)
+
+            ransaclines.append([line_X,line_y_ransac])
+        except:
+            continue
+
+    plt.figure()
+    for l in ransaclines:
+        plt.plot(l[0],l[1])    
+
+    plt.savefig('2savelanefig_{}.png'.format(index))
+```
