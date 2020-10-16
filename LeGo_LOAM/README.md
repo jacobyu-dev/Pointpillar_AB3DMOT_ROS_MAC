@@ -14,3 +14,17 @@ https://github.com/RobustFieldAutonomyLab/LeGO-LOAM
   organization={IEEE}
 }
 ```
+
+# VERSION
+
+ - version 1.0 LeGO-LOAM original version
+
+ - version 1.1 add commend for understanding code
+
+ - version 2.0 change code for kitti rosbag file
+
+ - version 2.1 add code to publish code with intensity (topic name : ground cloud intensity)
+
+ - version 2.2 change code to remove dynamic object
+
+ - version 2.3 change code for synchronizing with two topics(ground cloud intensity2, aft mapped to init)
