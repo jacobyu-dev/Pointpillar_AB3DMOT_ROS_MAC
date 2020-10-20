@@ -27,6 +27,17 @@ from sklearn import linear_model
 cnt = 1
 
 
+
+def convert_fuse(pointcloud_df, min_x = 0.0, min_y = 0.0, min_z = 0.0):
+    pointcloud_df["Latitude"] = pd.to_numeric(pointcloud_df["Latitude"])
+    pointcloud_df["Longitude"] = pd.to_numeric(pointcloud_df["Longitude"])
+    pointcloud_df["Altitude"] = pd.to_numeric(pointcloud_df["Altitude"])
+    pointcloud_df["Intensity"] = pd.to_numeric(pointcloud_df["Intensity"])
+    
+    pointcloud_df["Easting"] = pointcloud_df["Latitude"]
+    pointcloud_df["Northing"] = pointcloud_df["Longitude"]
+    return pointcloud_df, (min_x, min_y, min_z), (zone_number, zone_letter)
+
 def filter_by_mean_value(pointcloud_df):
 
     mean = pointcloud_df["Intensity"].mean()
@@ -44,8 +55,8 @@ class lidar_feature:
         self.lidar_pub = rospy.Publisher("point_to_rviz", PointCloud2, queue_size=1)
         self.bridge = CvBridge()        
         self.lidar_sub = rospy.Subscriber("/kitti/velo/pointcloud", PointCloud2, self.callback, queue_size=500)
-        #if VERBOSE :
-        print("\nsubscribed to /kitti/velo/pointcloud")
+        if VERBOSE :
+            print("\nsubscribed to /kitti/velo/pointcloud")
 
     def callback(self, ros_data):
         header = ros_data.header     
@@ -68,10 +79,10 @@ class lidar_feature:
         pointcloud_df["Altitude"] = a[:,2]
         pointcloud_df["Intensity"] = a[:,3]
 
+        pointcloud_df, (min_x, min_y, min_z), (number, letter) = convert_fuse(pointcloud_df)
         
-        pointcloud_df["Easting"] = pointcloud_df["Latitude"]
-        pointcloud_df["Northing"] = pointcloud_df["Longitude"]
-        
+        print("Finish convert coordinates! \n")
+
         xyzi_df = pointcloud_df[["Easting", "Northing", "Altitude", "Intensity"]]
 
         lanes_df = xyzi_df.copy()
