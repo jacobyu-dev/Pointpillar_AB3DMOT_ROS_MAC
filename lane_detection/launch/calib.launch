@@ -1,0 +1,5 @@
+<launch>
+
+    <node pkg="calib_pkg" type="Lidar2cam_calib.py" name="Lidar2cam_calib" output="screen"/>
+
+</launch>
