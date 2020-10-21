@@ -184,30 +184,32 @@ private:
     cv::Mat matP;
 
     int frameCount;
+    //추가
+    int que;
 
 public:
 
     FeatureAssociation():
         nh("~")
         {
-
-        subLaserCloud = nh.subscribe<sensor_msgs::PointCloud2>("/segmented_cloud", 1, &FeatureAssociation::laserCloudHandler, this);
-        subLaserCloudInfo = nh.subscribe<cloud_msgs::cloud_info>("/segmented_cloud_info", 1, &FeatureAssociation::laserCloudInfoHandler, this);
-        subOutlierCloud = nh.subscribe<sensor_msgs::PointCloud2>("/outlier_cloud", 1, &FeatureAssociation::outlierCloudHandler, this);
+        que=5;
+        subLaserCloud = nh.subscribe<sensor_msgs::PointCloud2>("/segmented_cloud", que, &FeatureAssociation::laserCloudHandler, this);
+        subLaserCloudInfo = nh.subscribe<cloud_msgs::cloud_info>("/segmented_cloud_info", que, &FeatureAssociation::laserCloudInfoHandler, this);
+        subOutlierCloud = nh.subscribe<sensor_msgs::PointCloud2>("/outlier_cloud", que, &FeatureAssociation::outlierCloudHandler, this);
         subImu = nh.subscribe<sensor_msgs::Imu>(imuTopic, 50, &FeatureAssociation::imuHandler, this);
         //추가
-        subGroundCloudIntensity1 = nh.subscribe<sensor_msgs::PointCloud2>("/ground_cloud_intensity", 1, &FeatureAssociation::pubGroundCloudIntensity, this);
-        pubGroundCloudIntensity1 = nh.advertise<sensor_msgs::PointCloud2>("/ground_cloud_intensity1", 1);
+        subGroundCloudIntensity1 = nh.subscribe<sensor_msgs::PointCloud2>("/ground_cloud_intensity", que, &FeatureAssociation::pubGroundCloudIntensity, this);
+        pubGroundCloudIntensity1 = nh.advertise<sensor_msgs::PointCloud2>("/ground_cloud_intensity1", que);
 
-        pubCornerPointsSharp = nh.advertise<sensor_msgs::PointCloud2>("/laser_cloud_sharp", 1);
-        pubCornerPointsLessSharp = nh.advertise<sensor_msgs::PointCloud2>("/laser_cloud_less_sharp", 1);
-        pubSurfPointsFlat = nh.advertise<sensor_msgs::PointCloud2>("/laser_cloud_flat", 1);
-        pubSurfPointsLessFlat = nh.advertise<sensor_msgs::PointCloud2>("/laser_cloud_less_flat", 1);
+        pubCornerPointsSharp = nh.advertise<sensor_msgs::PointCloud2>("/laser_cloud_sharp", que);
+        pubCornerPointsLessSharp = nh.advertise<sensor_msgs::PointCloud2>("/laser_cloud_less_sharp", que);
+        pubSurfPointsFlat = nh.advertise<sensor_msgs::PointCloud2>("/laser_cloud_flat", que);
+        pubSurfPointsLessFlat = nh.advertise<sensor_msgs::PointCloud2>("/laser_cloud_less_flat", que);
 
-        pubLaserCloudCornerLast = nh.advertise<sensor_msgs::PointCloud2>("/laser_cloud_corner_last", 2);
-        pubLaserCloudSurfLast = nh.advertise<sensor_msgs::PointCloud2>("/laser_cloud_surf_last", 2);
-        pubOutlierCloudLast = nh.advertise<sensor_msgs::PointCloud2>("/outlier_cloud_last", 2);
-        pubLaserOdometry = nh.advertise<nav_msgs::Odometry> ("/laser_odom_to_init", 5);
+        pubLaserCloudCornerLast = nh.advertise<sensor_msgs::PointCloud2>("/laser_cloud_corner_last", que);
+        pubLaserCloudSurfLast = nh.advertise<sensor_msgs::PointCloud2>("/laser_cloud_surf_last", que);
+        pubOutlierCloudLast = nh.advertise<sensor_msgs::PointCloud2>("/outlier_cloud_last", que);
+        pubLaserOdometry = nh.advertise<nav_msgs::Odometry> ("/laser_odom_to_init", que);
         
         initializationValue();
     }
@@ -838,12 +840,11 @@ public:
         sensor_msgs::PointCloud2 laserCloudOutMsg;
 
         //추가
-        if (pubGroundCloudIntensity1.getNumSubscribers() != 0){
-	        pcl::toROSMsg(*GroundCloudIntensity1, laserCloudOutMsg);
-	        laserCloudOutMsg.header.stamp = cloudHeader.stamp;
-	        laserCloudOutMsg.header.frame_id = "/base_link";
-	        pubGroundCloudIntensity1.publish(laserCloudOutMsg);
-	    }
+	    pcl::toROSMsg(*GroundCloudIntensity1, laserCloudOutMsg);
+	    laserCloudOutMsg.header.stamp = cloudHeader.stamp;
+	    laserCloudOutMsg.header.frame_id = "/velo_link";
+	    pubGroundCloudIntensity1.publish(laserCloudOutMsg);
+	    
 
 	    if (pubCornerPointsSharp.getNumSubscribers() != 0){
 	        pcl::toROSMsg(*cornerPointsSharp, laserCloudOutMsg);
@@ -1916,7 +1917,7 @@ public:
         if (newSegmentedCloud && newSegmentedCloudInfo && newOutlierCloud &&
             std::abs(timeNewSegmentedCloudInfo - timeNewSegmentedCloud) < 0.05 &&
             std::abs(timeNewOutlierCloud - timeNewSegmentedCloud) < 0.05){
-
+            //ROS_INFO("1 SegmentedCloudInfo %d", segInfo.header.seq);//388까지 
             newSegmentedCloud = false;
             newSegmentedCloudInfo = false;
             newOutlierCloud = false;

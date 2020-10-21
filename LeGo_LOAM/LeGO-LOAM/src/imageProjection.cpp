@@ -83,12 +83,6 @@ private:
     float endOrientation;
     
     //추가 
-    // float XM[10];
-    // float Xm[10];
-    // float YM[10];
-    // float Ym[10];
-    // float ZM[10];
-    // float Zm[10];
     float h, w, l;
     float tx, ty, tz;
     float *XM;
@@ -97,8 +91,8 @@ private:
     float *Ym;
     float *ZM;
     float *Zm;
+    int que;
 
-    
     size_t boxSize;
 
     cloud_msgs::cloud_info segMsg; // info of segmented cloud
@@ -118,22 +112,23 @@ public:
         nh("~"){
         //구독 ("토픽명", queue size, callback 함수)
         //추가
-        subBoundingBoxInfo = nh.subscribe<jsk_recognition_msgs::BoundingBoxArray>("/kitti_box", 1, &ImageProjection::boxCallback, this);
+        que=5;
+        subBoundingBoxInfo = nh.subscribe<jsk_recognition_msgs::BoundingBoxArray>("/kitti_box", que, &ImageProjection::boxCallback, this);
         boxSize = 0;
         //extern const string pointCloudTopic = "/velodyne_points"; in utility.h
-        subLaserCloud = nh.subscribe<sensor_msgs::PointCloud2>(pointCloudTopic, 1, &ImageProjection::cloudHandler, this);
+        subLaserCloud = nh.subscribe<sensor_msgs::PointCloud2>(pointCloudTopic, que, &ImageProjection::cloudHandler, this);
 
         //발행 ("토픽명", queue size)
-        pubFullCloud = nh.advertise<sensor_msgs::PointCloud2> ("/full_cloud_projected", 1);
-        pubFullInfoCloud = nh.advertise<sensor_msgs::PointCloud2> ("/full_cloud_info", 1);
+        pubFullCloud = nh.advertise<sensor_msgs::PointCloud2> ("/full_cloud_projected", que);
+        pubFullInfoCloud = nh.advertise<sensor_msgs::PointCloud2> ("/full_cloud_info", que);
 
-        pubGroundCloud = nh.advertise<sensor_msgs::PointCloud2> ("/ground_cloud", 1);
-        pubSegmentedCloud = nh.advertise<sensor_msgs::PointCloud2> ("/segmented_cloud", 1);
-        pubSegmentedCloudPure = nh.advertise<sensor_msgs::PointCloud2> ("/segmented_cloud_pure", 1);
-        pubSegmentedCloudInfo = nh.advertise<cloud_msgs::cloud_info> ("/segmented_cloud_info", 1);
-        pubOutlierCloud = nh.advertise<sensor_msgs::PointCloud2> ("/outlier_cloud", 1);
+        pubGroundCloud = nh.advertise<sensor_msgs::PointCloud2> ("/ground_cloud", que);
+        pubSegmentedCloud = nh.advertise<sensor_msgs::PointCloud2> ("/segmented_cloud", que);
+        pubSegmentedCloudPure = nh.advertise<sensor_msgs::PointCloud2> ("/segmented_cloud_pure", que);
+        pubSegmentedCloudInfo = nh.advertise<cloud_msgs::cloud_info> ("/segmented_cloud_info", que);
+        pubOutlierCloud = nh.advertise<sensor_msgs::PointCloud2> ("/outlier_cloud", que);
         //추가
-        pubGroundCloudIntensity = nh.advertise<sensor_msgs::PointCloud2> ("/ground_cloud_intensity", 1);
+        pubGroundCloudIntensity = nh.advertise<sensor_msgs::PointCloud2> ("/ground_cloud_intensity", que);
 
         //nan(Not a number) is point types
         nanPoint.x = std::numeric_limits<float>::quiet_NaN();
@@ -208,7 +203,7 @@ public:
         //추가
         groundCloudIntensity->clear();
         laserCloudIn1->clear();
-        
+
         //Matrix초기화
         //CV_32F(32bit floating-point number)
         //CV_8S(8bit signed integer)
@@ -232,9 +227,11 @@ public:
     ~ImageProjection(){}
 
     void boxCallback(const jsk_recognition_msgs::BoundingBoxArray::ConstPtr& BoundingBox){
-        float temp = 2.0;
-        ROS_INFO("boxCallback start %d", BoundingBox->header.seq);
+        float temp = 1.2;
+        //ROS_INFO("boxCallback start %d", BoundingBox->header.seq);
         boxSize = BoundingBox->boxes.size();
+        // double ro, pi, ya, ya_deg;
+        // float x, y, z, w;
 
         for(int i=0 ; i < boxSize ; i++){
 
@@ -247,17 +244,24 @@ public:
             tx = Box.pose.position.x;
             ty = Box.pose.position.y;
             tz = (Box.pose.position.z)*2;
-            
+
+            // tf::Quaternion orientation;
+            // tf::quaternionMsgToTF(Box.pose.orientation, orientation);
+            // tf::Matrix3x3(orientation).getRPY(ro, pi, ya);
+
+            // ya_deg = ya * 180.0 / M_PI;
+            // ROS_INFO("%lf", ya_deg);
+
             XM[i] = tx + temp*l;
             Xm[i] = tx - temp*l;
-
+            
             YM[i] = ty + temp*w;
             Ym[i] = ty - temp*w;
 
             ZM[i] = tz + temp*h;
             Zm[i] = tz - 10*h;
         }
-        ROS_INFO("boxCallback end %d", BoundingBox->header.seq);
+        //ROS_INFO("boxCallback end %d", BoundingBox->header.seq);
 
     }
 
@@ -269,7 +273,7 @@ public:
         //lasercloudmsg(sensor msgs를) -> lasercloudin(pcl msgs로), 즉, data 택배 포장지 뜯기
         pcl::fromROSMsg(*laserCloudMsg, *laserCloudIn1);
         //추가
-        // pcl::fromROSMsg(*laserCloudMsg, *groundCloudIntensity);
+        pcl::fromROSMsg(*laserCloudMsg, *groundCloudIntensity);
         // Remove Nan points
         //pcl::removeNaNFromPointCloud(input point cloud, output point cloud, vector)
         //revomes points with x,y,z equal to NaN.
@@ -285,31 +289,22 @@ public:
             thisPoint.x = laserCloudIn1->points[i].x;
             thisPoint.y = laserCloudIn1->points[i].y;
             thisPoint.z = laserCloudIn1->points[i].z;
-            //ROS_INFO("if +++ %f, %f", thisPoint.x, thisPoint.y);
             for(int j=0 ; j < boxSize ; j++){
                 if(Xm[j] < thisPoint.x && thisPoint.x < XM[j]){
                     if(Ym[j] < thisPoint.y && thisPoint.y < YM[j]){
-                        //ROS_INFO("22222 %f %f %f", Xm[i], laserCloudIn1->points[i].x, XM[i]);
                         laserCloudIn1->points[i] = nanPoint;
-                        // laserCloudIn->points[i].x = std::numeric_limits<float>::quiet_NaN();
-                        // laserCloudIn->points[i].y = std::numeric_limits<float>::quiet_NaN();
-                        // laserCloudIn->points[i].z = std::numeric_limits<float>::quiet_NaN();
-                        // laserCloudIn->points[i].intensity = -1;
-                        //ROS_INFO("22222 %f", laserCloudIn1->points[i].x);
-
                         }
-                }//ROS_INFO("if --- %f, %f", thisPoint.x, thisPoint.y);
+                }
             }
         }
-        
+
         std::vector<int> indices;
         pcl::removeNaNFromPointCloud(*laserCloudIn1, *laserCloudIn, indices);
-        //ROS_INFO("333 %zu", laserCloudIn->points.size());
         
 
         //추가
-        // std::vector<int> indices1;
-        // pcl::removeNaNFromPointCloud(*groundCloudIntensity, *groundCloudIntensity, indices1);
+        std::vector<int> indices1;
+        pcl::removeNaNFromPointCloud(*groundCloudIntensity, *groundCloudIntensity, indices1);
         
         // have "ring" channel in the cloud
         //extern const bool useCloudRing = true;
@@ -324,7 +319,7 @@ public:
     }
 
     void cloudHandler(const sensor_msgs::PointCloud2ConstPtr& laserCloudMsg){//velodyne point들 받기
-        ROS_INFO("cloudHander start %d", laserCloudMsg->header.seq);
+        //ROS_INFO("cloudHander start %d", laserCloudMsg->header.seq);
         // 1. Convert ros message to pcl point cloud
         copyPointCloud(laserCloudMsg);
         // 2. Start and end angle of a scan
@@ -339,7 +334,7 @@ public:
         publishCloud();
         // 7. Reset parameters for next iteration
         resetParameters();
-        ROS_INFO("cloudHander end %d", laserCloudMsg->header.seq);
+        //ROS_INFO("cloudHander end %d", laserCloudMsg->header.seq);
     }
 
     void findStartEndAngle(){
@@ -490,11 +485,12 @@ public:
             for (size_t i = 0; i <= groundScanInd; ++i){
                 for (size_t j = 0; j < Horizon_SCAN; ++j){
                     if (groundMat.at<int8_t>(i,j) == 1){
-                        groundCloud->push_back(fullCloud->points[j + i*Horizon_SCAN]);}
+                        groundCloud->push_back(fullCloud->points[j + i*Horizon_SCAN]);
+                    }
                 }
             }
         }
-        //추가
+
         for (size_t i = 0; i <= groundScanInd; ++i){
             for (size_t j = 0; j < Horizon_SCAN; ++j){
                 if (groundMat.at<int8_t>(i,j) == 1){
@@ -518,11 +514,11 @@ public:
 
             segMsg.startRingIndex[i] = sizeOfSegCloud-1 + 5;//cloud_msgs::cloud_info segMsg, startRingIndex는 16개
             //printf("startRingIndex[%zu] = %d\n", i, segMsg.startRingIndex[i]);
-            for (size_t j = 0; j < Horizon_SCAN; ++j) {//1800반복
+            for (size_t j = 0; j < 900; ++j) {//전방 outliercloud FOV 범위
                 if (labelMat.at<int>(i,j) > 0 || groundMat.at<int8_t>(i,j) == 1){//range and FLT_MAX || ground 
                     // outliers that will not be used for optimization (always continue)
-                    if (labelMat.at<int>(i,j) == 999999){//FLT_MAX일 때
-                        if (i > groundScanInd && j % 5 == 0){//ring이 7보다 위 채널이고, sample이 5의 배수 라면
+                    if (labelMat.at<int>(i,j) == 999999 && groundMat.at<int8_t>(i,j) != 1){//FLT_MAX일 때
+                        if (i > groundScanInd && j % 5 == 0){//ring이 7보다 위 채널이고, sample이 5의 배수 라면 //마지막 && 조건 추가
                             //j + i*Horizon_SCAN 인덱스에 들어있는 fullCloud가ㅄ을 outlierCloud에 대입
                             outlierCloud->push_back(fullCloud->points[j + i*Horizon_SCAN]);
                             continue;
@@ -535,18 +531,55 @@ public:
                         if (j%5!=0 && j>5 && j<Horizon_SCAN-5)//중에 sample이 5이상인 5의 배수이고 1795보다 작을 때 
                             continue;
                     }
-                    //여기를 지나는 matrix는 range가 있는 matrix들
-                    // mark ground points so they will not be considered as edge features later
-                    segMsg.segmentedCloudGroundFlag[sizeOfSegCloud] = (groundMat.at<int8_t>(i,j) == 1);
-                    // mark the points' column index for marking occlusion later
-                    //index (i+1)-i = segment된 point 수
-                    segMsg.segmentedCloudColInd[sizeOfSegCloud] = j;
-                    // save range info
-                    segMsg.segmentedCloudRange[sizeOfSegCloud]  = rangeMat.at<float>(i,j);
-                    // save seg cloud
-                    segmentedCloud->push_back(fullCloud->points[j + i*Horizon_SCAN]);
-                    // size of seg cloud
-                    ++sizeOfSegCloud;//16개층에 걸친 segmented cloud 수(?)
+                    //if문 추가 groundmat seg에서 제외
+                    if (groundMat.at<int8_t>(i,j) != 1){
+                        //여기를 지나는 matrix는 range가 있는 matrix들
+                        // mark ground points so they will not be considered as edge features later
+                        segMsg.segmentedCloudGroundFlag[sizeOfSegCloud] = (groundMat.at<int8_t>(i,j) == 1);
+                        // mark the points' column index for marking occlusion later
+                        //index (i+1)-i = segment된 point 수
+                        segMsg.segmentedCloudColInd[sizeOfSegCloud] = j;
+                        // save range info
+                        segMsg.segmentedCloudRange[sizeOfSegCloud]  = rangeMat.at<float>(i,j);
+                        // save seg cloud
+                        segmentedCloud->push_back(fullCloud->points[j + i*Horizon_SCAN]);
+                        // size of seg cloud
+                        ++sizeOfSegCloud;//16개층에 걸친 segmented cloud 수(?)
+                    }
+                }
+            }
+            for (size_t j = 901; j < 1799; ++j) {
+                if (labelMat.at<int>(i,j) > 0 || groundMat.at<int8_t>(i,j) == 1){//range and FLT_MAX || ground 
+                    // outliers that will not be used for optimization (always continue)
+                    if (labelMat.at<int>(i,j) == 999999 && groundMat.at<int8_t>(i,j) != 1){//FLT_MAX일 때
+                        if (i > groundScanInd && j % 5 == 0){//ring이 7보다 위 채널이고, sample이 5의 배수 라면 //마지막 && 조건 추가
+                            //j + i*Horizon_SCAN 인덱스에 들어있는 fullCloud가ㅄ을 outlierCloud에 대입
+                            outlierCloud->push_back(fullCloud->points[j + i*Horizon_SCAN]);
+                            continue;
+                        }else{//range 있을 때
+                            continue;
+                        }
+                    }
+                    // majority of ground points are skipped
+                    if (groundMat.at<int8_t>(i,j) == 1){//확실한 ground Matrix
+                        if (j%5!=0 && j>5 && j<Horizon_SCAN-5)//중에 sample이 5이상인 5의 배수이고 1795보다 작을 때 
+                            continue;
+                    }
+                    //if문 추가 groundmat seg에서 제외
+                    if (groundMat.at<int8_t>(i,j) != 1){
+                        //여기를 지나는 matrix는 range가 있는 matrix들
+                        // mark ground points so they will not be considered as edge features later
+                        segMsg.segmentedCloudGroundFlag[sizeOfSegCloud] = (groundMat.at<int8_t>(i,j) == 1);
+                        // mark the points' column index for marking occlusion later
+                        //index (i+1)-i = segment된 point 수
+                        segMsg.segmentedCloudColInd[sizeOfSegCloud] = j;
+                        // save range info
+                        segMsg.segmentedCloudRange[sizeOfSegCloud]  = rangeMat.at<float>(i,j);
+                        // save seg cloud
+                        segmentedCloud->push_back(fullCloud->points[j + i*Horizon_SCAN]);
+                        // size of seg cloud
+                        ++sizeOfSegCloud;//16개층에 걸친 segmented cloud 수(?)
+                    }
                 }
             }
             //printf("sizeOfSegCloud=%d\n", sizeOfSegCloud);
@@ -703,16 +736,15 @@ public:
         if (pubGroundCloud.getNumSubscribers() != 0){
             pcl::toROSMsg(*groundCloud, laserCloudTemp);
             laserCloudTemp.header.stamp = cloudHeader.stamp;
-            laserCloudTemp.header.frame_id = "base_link";
+            laserCloudTemp.header.frame_id = "velo_link";
             pubGroundCloud.publish(laserCloudTemp);
         }
         //추가
-        if (pubGroundCloudIntensity.getNumSubscribers() != 0){
-            pcl::toROSMsg(*groundCloudIntensity, laserCloudTemp);
-            laserCloudTemp.header.stamp = cloudHeader.stamp;
-            laserCloudTemp.header.frame_id = "base_link";
-            pubGroundCloudIntensity.publish(laserCloudTemp);
-        }
+        pcl::toROSMsg(*groundCloudIntensity, laserCloudTemp);
+        laserCloudTemp.header.stamp = cloudHeader.stamp;
+        laserCloudTemp.header.frame_id = "base_link";
+        pubGroundCloudIntensity.publish(laserCloudTemp);
+        
         // segmented cloud without ground
         if (pubSegmentedCloudPure.getNumSubscribers() != 0){
             pcl::toROSMsg(*segmentedCloudPure, laserCloudTemp);

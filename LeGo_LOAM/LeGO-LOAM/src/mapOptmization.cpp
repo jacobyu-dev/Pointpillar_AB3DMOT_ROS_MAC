@@ -76,7 +76,7 @@ private:
     ros::Subscriber subGroundCloudIntensity2;
     ros::Publisher pubGroundCloudIntensity2;
     pcl::PointCloud<PointType>::Ptr GroundCloudIntensity3;
-
+    int que;
     //Subscriber를 통해 sub노드 만들기
     ros::Subscriber subLaserCloudCornerLast;
     ros::Subscriber subLaserCloudSurfLast;
@@ -237,29 +237,30 @@ public:
 		parameters.relinearizeThreshold = 0.01;
 		parameters.relinearizeSkip = 1;
     	isam = new ISAM2(parameters);
+        que=5;
 
         //publish "aft_mapped_to_init" to transformFusion
         //publish also key_pose_origin
-        pubKeyPoses = nh.advertise<sensor_msgs::PointCloud2>("/key_pose_origin", 2);
-        pubLaserCloudSurround = nh.advertise<sensor_msgs::PointCloud2>("/laser_cloud_surround", 2);
+        pubKeyPoses = nh.advertise<sensor_msgs::PointCloud2>("/key_pose_origin", que);
+        pubLaserCloudSurround = nh.advertise<sensor_msgs::PointCloud2>("/laser_cloud_surround", que);
         //해린이가 가져가알 것
-        pubOdomAftMapped = nh.advertise<nav_msgs::Odometry> ("/aft_mapped_to_init", 5);
+        pubOdomAftMapped = nh.advertise<nav_msgs::Odometry> ("/aft_mapped_to_init", que);
         //추가
-        subGroundCloudIntensity2 = nh.subscribe<sensor_msgs::PointCloud2>("/ground_cloud_intensity1", 1, &mapOptimization::subGroundCloudIntensity, this);
-        pubGroundCloudIntensity2 = nh.advertise<sensor_msgs::PointCloud2>("/ground_cloud_intensity2", 1);
+        subGroundCloudIntensity2 = nh.subscribe<sensor_msgs::PointCloud2>("/ground_cloud_intensity1", que, &mapOptimization::subGroundCloudIntensity, this);
+        pubGroundCloudIntensity2 = nh.advertise<sensor_msgs::PointCloud2>("/ground_cloud_intensity2", que);
 
         //subscribe below 4 topic from featureAssociation
-        subLaserCloudCornerLast = nh.subscribe<sensor_msgs::PointCloud2>("/laser_cloud_corner_last", 2, &mapOptimization::laserCloudCornerLastHandler, this);
-        subLaserCloudSurfLast = nh.subscribe<sensor_msgs::PointCloud2>("/laser_cloud_surf_last", 2, &mapOptimization::laserCloudSurfLastHandler, this);
-        subOutlierCloudLast = nh.subscribe<sensor_msgs::PointCloud2>("/outlier_cloud_last", 2, &mapOptimization::laserCloudOutlierLastHandler, this);
-        subLaserOdometry = nh.subscribe<nav_msgs::Odometry>("/laser_odom_to_init", 5, &mapOptimization::laserOdometryHandler, this);
+        subLaserCloudCornerLast = nh.subscribe<sensor_msgs::PointCloud2>("/laser_cloud_corner_last", que, &mapOptimization::laserCloudCornerLastHandler, this);
+        subLaserCloudSurfLast = nh.subscribe<sensor_msgs::PointCloud2>("/laser_cloud_surf_last", que, &mapOptimization::laserCloudSurfLastHandler, this);
+        subOutlierCloudLast = nh.subscribe<sensor_msgs::PointCloud2>("/outlier_cloud_last", que, &mapOptimization::laserCloudOutlierLastHandler, this);
+        subLaserOdometry = nh.subscribe<nav_msgs::Odometry>("/laser_odom_to_init", que, &mapOptimization::laserOdometryHandler, this);
         subImu = nh.subscribe<sensor_msgs::Imu> (imuTopic, 50, &mapOptimization::imuHandler, this);
         
         //publish also registered_cloud
-        pubHistoryKeyFrames = nh.advertise<sensor_msgs::PointCloud2>("/history_cloud", 2);
-        pubIcpKeyFrames = nh.advertise<sensor_msgs::PointCloud2>("/corrected_cloud", 2);
-        pubRecentKeyFrames = nh.advertise<sensor_msgs::PointCloud2>("/recent_cloud", 2);
-        pubRegisteredCloud = nh.advertise<sensor_msgs::PointCloud2>("/registered_cloud", 2);
+        pubHistoryKeyFrames = nh.advertise<sensor_msgs::PointCloud2>("/history_cloud", que);
+        pubIcpKeyFrames = nh.advertise<sensor_msgs::PointCloud2>("/corrected_cloud", que);
+        pubRecentKeyFrames = nh.advertise<sensor_msgs::PointCloud2>("/recent_cloud", que);
+        pubRegisteredCloud = nh.advertise<sensor_msgs::PointCloud2>("/registered_cloud", que);
 
         downSizeFilterCorner.setLeafSize(0.2, 0.2, 0.2);
         downSizeFilterSurf.setLeafSize(0.4, 0.4, 0.4);
@@ -534,7 +535,6 @@ public:
         tX = transformTobeMapped[3];
         tY = transformTobeMapped[4];
         tZ = transformTobeMapped[5];
-        ROS_INFO("%f", tZ);
     }
 
     //
@@ -669,6 +669,7 @@ public:
     void laserOdometryHandler(const nav_msgs::Odometry::ConstPtr& laserOdometry){
         timeLaserOdometry = laserOdometry->header.stamp.toSec();
         double roll, pitch, yaw;
+        //ROS_INFO("laserOdo %d", laserOdometry->header.seq);
         //laserOdometry로 부터 geoQuat에 x,y,z,w 받음
         geometry_msgs::Quaternion geoQuat = laserOdometry->pose.pose.orientation;
         //XYZ축에 고정된 roll pitch yaw값을 matrix로 표현
@@ -713,11 +714,11 @@ public:
         odomAftMapped.twist.twist.linear.y = transformBefMapped[4];
         odomAftMapped.twist.twist.linear.z = transformBefMapped[5];
         pubOdomAftMapped.publish(odomAftMapped);
-
+        //ROS_INFO("OooooDO %d", odomAftMapped.header.seq);
 
         sensor_msgs::PointCloud2 cloudMsgTemp;
         pcl::toROSMsg(*GroundCloudIntensity3, cloudMsgTemp);
-        cloudMsgTemp.header.frame_id = "/base_link";
+        cloudMsgTemp.header.frame_id = "/velo_link";
         pubGroundCloudIntensity2.publish(cloudMsgTemp);
 
         aftMappedTrans.stamp_ = ros::Time().fromSec(timeLaserOdometry);
@@ -778,33 +779,43 @@ public:
         while (ros::ok()){
             rate.sleep();
             publishGlobalMap();
+        //ROS_INFO("in function in while");
+
         }
+        printf("1  \n");
 
         // save final point cloud
         pcl::io::savePCDFileASCII(fileDirectory+"finalCloud.pcd", *globalMapKeyFramesDS);
+        printf("2\n");
 
         string cornerMapString = "/tmp/cornerMap.pcd";
         string surfaceMapString = "/tmp/surfaceMap.pcd";
         string trajectoryString = "/tmp/trajectory.pcd";
+        printf("3\n");
 
         pcl::PointCloud<PointType>::Ptr cornerMapCloud(new pcl::PointCloud<PointType>());
         pcl::PointCloud<PointType>::Ptr cornerMapCloudDS(new pcl::PointCloud<PointType>());
         pcl::PointCloud<PointType>::Ptr surfaceMapCloud(new pcl::PointCloud<PointType>());
         pcl::PointCloud<PointType>::Ptr surfaceMapCloudDS(new pcl::PointCloud<PointType>());
-        
+        printf("4\n");
+
         for(int i = 0; i < cornerCloudKeyFrames.size(); i++) {
             *cornerMapCloud  += *transformPointCloud(cornerCloudKeyFrames[i],   &cloudKeyPoses6D->points[i]);
     	    *surfaceMapCloud += *transformPointCloud(surfCloudKeyFrames[i],     &cloudKeyPoses6D->points[i]);
     	    *surfaceMapCloud += *transformPointCloud(outlierCloudKeyFrames[i],  &cloudKeyPoses6D->points[i]);
         }
+        printf("5\n");
 
         downSizeFilterCorner.setInputCloud(cornerMapCloud);
         downSizeFilterCorner.filter(*cornerMapCloudDS);
         downSizeFilterSurf.setInputCloud(surfaceMapCloud);
         downSizeFilterSurf.filter(*surfaceMapCloudDS);
+        printf("6\n");
+
         pcl::io::savePCDFileASCII(fileDirectory+"cornerMap.pcd", *cornerMapCloudDS);
         pcl::io::savePCDFileASCII(fileDirectory+"surfaceMap.pcd", *surfaceMapCloudDS);
         pcl::io::savePCDFileASCII(fileDirectory+"trajectory.pcd", *cloudKeyPoses3D);
+        printf("7\n");
     }
 
     void publishGlobalMap(){
@@ -855,7 +866,6 @@ public:
         //loop가 닫혔으면 함수 끝
         //printf("loopClosureThread function\n");
         if (loopClosureEnableFlag == false){
-            //printf("loopClosureThread function flag false\n");
             return;
         }
         //아니라면 performloopclosure 계속 수행
@@ -937,7 +947,6 @@ public:
 
     //loopclosure 수행
     void performLoopClosure(){
-        //printf("performLoopClosure function start\n");
         if (cloudKeyPoses3D->points.empty() == true)
             return;
         // try to find close key frame if there are any
@@ -1445,10 +1454,8 @@ public:
             saveThisKeyFrame = false;
         }
 
-        
-
-        if (saveThisKeyFrame == false && !cloudKeyPoses3D->points.empty())
-        	return;
+        if (saveThisKeyFrame == false && !cloudKeyPoses3D->points.empty()){
+        	return;}
 
         previousRobotPosPoint = currentRobotPosPoint;
         /**
@@ -1575,12 +1582,14 @@ public:
             newLaserCloudOutlierLast && std::abs(timeLaserCloudOutlierLast - timeLaserOdometry) < 0.005 &&
             newLaserOdometry)
         {
+        //ROS_INFO("1 laserCloudOutlier %d",laserCloudOutlierLast->header.seq);
 
             newLaserCloudCornerLast = false; newLaserCloudSurfLast = false; newLaserCloudOutlierLast = false; newLaserOdometry = false;
 
             std::lock_guard<std::mutex> lock(mtx);
 
             if (timeLaserOdometry - timeLastProcessing >= mappingProcessInterval) {
+            //ROS_INFO("11 laserCloudOutlier %d",laserCloudOutlierLast->header.seq);
 
                 timeLastProcessing = timeLaserOdometry;
 
@@ -1599,6 +1608,7 @@ public:
                 publishTF();
 
                 publishKeyPosesAndFrames();
+                
                 clearCloud();
             }
         }
