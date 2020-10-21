@@ -28,3 +28,5 @@ https://github.com/RobustFieldAutonomyLab/LeGO-LOAM
  - version 2.2 change code to remove dynamic object
 
  - version 2.3 change code for synchronizing with two topics(ground cloud intensity2, aft mapped to init)
+
+ - version 2.4 remove ground cloud & modify outlier FOV
