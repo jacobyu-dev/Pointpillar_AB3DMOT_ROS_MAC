@@ -150,7 +150,7 @@ class MoDetect_N_Track:
 
 
         ### 자기 속도 Publishing Logic    
-        header = TwistStamped.header     
+        # headerImu = TwistStamped.header     
         oxtLinear = TwistStamped.twist.linear
         selfvelo = np.sqrt(oxtLinear.x ** 2 + oxtLinear.y ** 2 + oxtLinear.z ** 2)
         selfvelo = np.round_(selfvelo,1)    # m/s
@@ -320,8 +320,6 @@ class MoDetect_N_Track:
                 warning_line_markers.markers.append(warning_line)
 
 
-
-
             # Data Check용 로직 
             # global df_18, df_34, df_35
             # if obj_id =='18':
@@ -346,7 +344,7 @@ class MoDetect_N_Track:
             type=Marker.CYLINDER,
             id=int(obj_id),
             lifetime=rospy.Duration(0.5),
-            pose=Pose(Point(0.5,-0.5,-1.0), Quaternion(0, 0, 0, 1)),
+            pose=Pose(Point(0.0,0.0,-1.0), Quaternion(0, 0, 0, 1)),
             scale=Vector3(8.0, 8.0, 0.1),                           # line width
             header=header,
             color=outer_circle_color
@@ -356,7 +354,7 @@ class MoDetect_N_Track:
             type=Marker.CYLINDER,
             id=int(obj_id),
             lifetime=rospy.Duration(0.5),
-            pose=Pose(Point(0.5,-0.5,-0.8), Quaternion(0, 0, 0, 1)),
+            pose=Pose(Point(0.0,0.0,-0.8), Quaternion(0, 0, 0, 1)),
             scale=Vector3(7.0, 7.0, 0.2),                           # line width
             header=header,
             color=ColorRGBA(0.22, 0.22, 0.22, 1.0)
