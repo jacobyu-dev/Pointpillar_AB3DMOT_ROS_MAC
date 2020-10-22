@@ -8,6 +8,9 @@ import sensor_msgs.point_cloud2 as pc2
 from sensor_msgs.msg import PointCloud2, PointField
 import open3d as o3d
 
+import tf as tf2
+from tf import TransformListener
+
 type_mappings = [(PointField.INT8, np.dtype('int8')), (PointField.UINT8, np.dtype('uint8')), (PointField.INT16, np.dtype('int16')),
                  (PointField.UINT16, np.dtype('uint16')), (PointField.INT32, np.dtype('int32')), (PointField.UINT32, np.dtype('uint32')),
                  (PointField.FLOAT32, np.dtype('float32')), (PointField.FLOAT64, np.dtype('float64'))]
@@ -27,6 +30,27 @@ _DATATYPES[PointField.FLOAT32] = ('f', 4)
 _DATATYPES[PointField.FLOAT64] = ('d', 8)
 
 DUMMY_FIELD_PREFIX = '__'
+
+def get_odom(tf,frame, dest_frame):
+    try:
+        t = tf.getLatestCommonTime(dest_frame, frame)
+        position, quaternion = tf.lookupTransform(dest_frame, frame, t)
+
+        trans_mat = tf2.transformations.translation_matrix(position)
+        rot_mat = tf2.transformations.quaternion_matrix(quaternion)
+        # create a 4x4 matrix
+        mat = np.dot(trans_mat, rot_mat)
+    except(tf2.Exception, tf2.ConnectivityException, tf2.LookupException):
+        print("miss")
+        return
+    return mat
+
+def save_ply(point,file_name):
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(point[:,:3])
+
+    o3d.io.write_point_cloud(file_name, pcd)
+    return
 
 
 def get_transformation(odom_mat,points):

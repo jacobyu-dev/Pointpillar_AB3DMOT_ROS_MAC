@@ -17,6 +17,7 @@ from nav_msgs.msg import Odometry
 from sensor_msgs.msg import PointCloud2, PointField
 
 from utils import *
+import open3d
 
 pc_stack = np.empty((0, 3), float)
 
@@ -26,8 +27,6 @@ class lane_detection_class:
 
     def __init__(self):
         self.lidar_pub = rospy.Publisher("/frame_stack", PointCloud2, queue_size=4)
-        # self.lidar_sub = rospy.Subscriber("/ground_cloud_intensity", PointCloud2, self.callback, queue_size=3)
-
         self.lidar_sub = rospy.Subscriber("/kitti/velo/pointcloud", PointCloud2, self.callback, queue_size=5)
         self.tf = TransformListener()
 
@@ -39,42 +38,32 @@ class lane_detection_class:
         xyz_points = pc_np[:,:3]
         intensity = pc_np[:,3]
 
-        road_pts = extract_points(pc_np, voxel_size = 0.05, x_range= (-10, 10), y_range= (-10, 15), z_range= (-5, -1.2), i_range= (0.45, 0.9))
+        # road_pts = extract_points(pc_np, voxel_size = 0.05, x_range= (-10, 10), y_range= (-10, 15), z_range= (-5, -1.2), i_range= (0.48, 0.9))
 
         # pc_stack = np.append(pc_stack, road_pts, axis=0)
 
-        odom_mat = self.get_odom()
+        odom_mat = get_odom(self.tf,"velo_link", "map")
 
         if odom_mat is not None:
-            points = get_transformation(odom_mat,road_pts)
+            points = get_transformation(odom_mat,xyz_points)
+            # points = get_transformation(odom_mat,road_pts)
+            if PointCloud2.header.seq  % 10 == 0 :
+                pc_stack = np.append(pc_stack, points, axis=0)
 
-            pc_stack = np.append(pc_stack, points, axis=0)
+        pc_stack = np.append(pc_stack, xyz_points, axis=0)
 
+        # if PointCloud2.header.seq == 389: 
+        #     save_ply(pc_stack,"save.ply")
 
-        if (PointCloud2.header.seq > 0) and (PointCloud2.header.seq % frame_stack == 0): 
+        # if (PointCloud2.header.seq > 0) and (PointCloud2.header.seq % frame_stack == 0): 
 
-            PointCloud2.header.frame_id = "/map"
-            point_pc2 = xyzarray_to_pc2(pc_stack, PointCloud2)
+        #     PointCloud2.header.frame_id = "/map"
+        #     point_pc2 = xyzarray_to_pc2(pc_stack, PointCloud2)
 
-            pc_stack = np.empty((0, 3), float)
+        #     pc_stack = np.empty((0, 3), float)
 
-            print("pub : ", PointCloud2.header.seq)
-            self.lidar_pub.publish(point_pc2)
-
-    def get_odom(self):
-        try:
-            t = self.tf.getLatestCommonTime("/map", "/velo_link")
-            position, quaternion = self.tf.lookupTransform("/map", "/velo_link", t)
-
-            trans_mat = tf2.transformations.translation_matrix(position)
-            rot_mat = tf2.transformations.quaternion_matrix(quaternion)
-            # create a 4x4 matrix
-            mat = np.dot(trans_mat, rot_mat)
-        except(tf2.Exception, tf2.ConnectivityException, tf2.LookupException):
-            print("miss")
-            return
-        return mat
-
+        #     print("pub : ", PointCloud2.header.seq)
+        #     self.lidar_pub.publish(point_pc2)
 
 def main(args):
     '''Initializes and cleanup ros node'''
