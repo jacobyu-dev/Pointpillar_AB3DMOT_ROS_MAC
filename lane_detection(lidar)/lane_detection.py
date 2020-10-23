@@ -33,14 +33,14 @@ from geometry_msgs.msg import Quaternion
 from geometry_msgs.msg import Point
 from std_msgs.msg import ColorRGBA
 
-import rviz_tools as rviz_tools
-
 
 pc_stack = np.empty((0, 3), float)
 Lane_markers_array = MarkerArray()
+Plane_markers_array = MarkerArray()
 frame_stack = 10
 id_global = 0
 weight_past = 0 
+
 
 class lane_detection_class:
 
@@ -49,12 +49,13 @@ class lane_detection_class:
         self.lidar_sub = rospy.Subscriber("/kitti/velo/pointcloud", PointCloud2, self.callback, queue_size=5)
 
         self.pub_Lane_marker = rospy.Publisher('/lane_marker', MarkerArray, queue_size=5)
+        self.pub_Plane_marker = rospy.Publisher('/Plane_marker', MarkerArray, queue_size=5)
         # self.pub_Lane_marker2 = rospy.Publisher('/lane_marker2', Marker, queue_size=5)
 
         self.tf = TransformListener()
 
     def callback(self, PointCloud2):
-        global pc_stack, frame_stack, Lane_markers_array, id_global, weight_past
+        global pc_stack, frame_stack, Lane_markers_array, Plane_markers_array, id_global, weight_past
         # print("callback : ", PointCloud2.header.seq)
 
         pc_np = get_xyzi_points(pointcloud2_to_array(PointCloud2))
@@ -95,13 +96,16 @@ class lane_detection_class:
                                                     #residual_metric = lamda x: np.sum(np.abs(x), axis=1))
 
 
-            ransaclines = []
             # Lane_markers_array = MarkerArray() # passed path
 
             def add_square_feature(X):
                 # X = np.concatenate([(X**2).reshape(-1,1), X], axis=1)
                 return X
 
+            lane1x = sys.maxsize
+            lane1y = sys.maxsize
+            lane2x = -sys.maxsize - 1
+            lane2y = -sys.maxsize - 1
             for cluster in range(n_clusters_):
                 sub_cluster_df = pc_stack[labels == cluster]
           
@@ -114,7 +118,16 @@ class lane_detection_class:
 
                 line_X = np.arange(Xpoints.min(), Xpoints.max())[:, np.newaxis]
                 line_y_ransac = ransac.predict(add_square_feature(line_X))
-                ransaclines.append([line_X,line_y_ransac])
+
+                if line_X.min() < lane1x:
+                    lane1x = line_X.min()
+                if line_y_ransac.min() < lane1y:
+                    lane1y = line_y_ransac.min()
+
+                if line_X.max() > lane2x:
+                    lane2x = line_X.max()
+                if line_y_ransac.max() > lane2y:
+                    lane2y = line_y_ransac.max()
 
                 weight = (line_y_ransac.max()- line_y_ransac.min()) / (line_X.max()-line_X.min())
 
@@ -141,7 +154,27 @@ class lane_detection_class:
                         Lane_marker.points.append(l_points)
 
                     Lane_markers_array.markers.append(Lane_marker)
+                    
+                    rect_point1 = Point(lane1x,lane1y,0) 
+                    rect_point2 = Point(lane2x,lane2y,0) 
 
+                    Plane_marker = Marker(type=Marker.CUBE, 
+                                            header = PointCloud2.header,
+                                            action = Marker.ADD,
+                                            id = id_global,
+                                            scale = Vector3(np.fabs(rect_point1.x - rect_point2.x),
+                                                            np.fabs(rect_point1.y - rect_point2.y), 
+                                                            np.fabs(rect_point1.z - rect_point2.z)),
+                                            color = ColorRGBA(0.0, 0.0, 0.0, 1.0),
+                                            pose= Pose(Point((rect_point1.x - rect_point2.x) / 2.0 + rect_point2.x,
+                                                             (rect_point1.y - rect_point2.y) / 2.0 + rect_point2.y,
+                                                             (rect_point1.z - rect_point2.z) / 2.0 + rect_point2.z), 
+                                                             Quaternion(0, 0, 0, 1)),
+                                            lifetime=rospy.Duration(300))
+                    
+                    Plane_marker.header.frame_id = "/map"
+                    Plane_markers_array.markers.append(Plane_marker)
+                    
                 weight_past = weight
 
             PointCloud2.header.frame_id = "/map"
@@ -149,20 +182,8 @@ class lane_detection_class:
 
             pc_stack = np.empty((0, 3), float)
 
-            lane1endx=ransaclines[0][0][len(ransaclines[0][0])-1][0]
-            lane1endy=ransaclines[0][1][len(ransaclines[0][1])-1][0]
-
-            lane3startx=ransaclines[2][0][0][0]
-            lane3starty=ransaclines[2][1][0][0]
-
-            markers = rviz_tools.RvizMarkers('/map', 'visualization_marker')
-            point1 = Point(lane3startx,lane3starty,0) 
-            point2 = Point(lane1endx,lane1endy,0) 
-    
-            markers.publishRectangle(point1, point2, 'black', 5.0)
-
-
             self.pub_Lane_marker.publish(Lane_markers_array)
+            self.pub_Plane_marker.publish(Plane_markers_array)
             self.lidar_pub.publish(point_pc2)
             
 
