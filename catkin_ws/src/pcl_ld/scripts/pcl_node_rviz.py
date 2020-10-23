@@ -28,6 +28,7 @@ import math
 import os
 import struct
 from ParticleFilter import ParticleFilter
+import rviz_tools as rviz_tools
 
 cnt = 0
 
@@ -113,18 +114,18 @@ class lidar_feature:
         Northing=[]
         group=[]
         for i in X:
-            if i[1]>3 and i[1]<5:
-                if i[0]>-20 and i[0]<20:
+            if i[1]>4 and i[1]<6:
+                if i[0]>-10 and i[0]<10:
                     Easting.append(i[0])
                     Northing.append(i[1])
                     group.append(1)
-            elif i[1]>-1 and i[1]<2:
-                if i[0]>-20 and i[0]<20:
+            elif i[1]>-1 and i[1]<1:
+                if i[0]>-10 and i[0]<10:
                     Easting.append(i[0])
                     Northing.append(i[1])
                     group.append(2)
-            elif i[1]>-2 and i[1]<-1:
-                if i[0]>-20 and i[0]<20:
+            elif i[1]>-3 and i[1]<-1:
+                if i[0]>-10 and i[0]<10:
                     Easting.append(i[0])
                     Northing.append(i[1])
                     group.append(3)
@@ -143,14 +144,20 @@ class lidar_feature:
         n_clusters_ = len(set(labels)) - (1 if -1 in labels else 0)
         cluster_df2 = cluster_df2[cluster_df2["group"]>=0]
 
+        def add_square_feature(X):
+            X = np.concatenate([(X**2).reshape(-1,1), X], axis=1)
+            return X
+
         for cluster in range(n_clusters_):
             sub_cluster_df = cluster_df2[cluster_df2["group"] == cluster]
             try:
                 Xpoints = sub_cluster_df[["X"]].values
                 Ypoints = sub_cluster_df[["Y"]].values
-                ransac.fit(Xpoints, Ypoints)
+                Xpoints = Xpoints.reshape(-1,1)
+
+                ransac.fit(add_square_feature(Xpoints), Ypoints)
                 line_X = np.arange(Xpoints.min(), Xpoints.max())[:, np.newaxis]
-                line_y_ransac = ransac.predict(line_X)
+                line_y_ransac = ransac.predict(add_square_feature(line_X))
 
                 ransaclines.append([line_X,line_y_ransac])
             except:
@@ -229,7 +236,6 @@ class lidar_feature:
         marker.points.append(first_line_point)
 
         lane1endx=ransaclines[0][0][len(ransaclines[0][0])-1][0]
-        #lane1endx=15
         lane1endy=ransaclines[0][1][len(ransaclines[0][1])-1][0]
 
         second_line_point=Point()
@@ -238,17 +244,12 @@ class lidar_feature:
         second_line_point.z=0.0
         marker.points.append(second_line_point)
 
-
         lane2startx=ransaclines[1][0][0][0]
-        #lane2startx=-20  ### I will use particle filter
         lane2starty=ransaclines[1][1][0][0]
 
         lane2endx=ransaclines[1][0][len(ransaclines[1][0])-1][0]
-        #lane2endx=20 ### 
         lane2endy=ransaclines[1][1][len(ransaclines[1][1])-1][0]
 
-        #lane2startx=(lane1startx+lane3startx)/2
-        #lane2endx=(lane1endx+lane3endx)/2
         for i in range(0,int(lane2endx-lane2startx),2):
             line_point=Point()
             line_point.x=lane2startx + i
@@ -273,6 +274,12 @@ class lidar_feature:
         sixth_line_point.y=lane3endy
         sixth_line_point.z=0.0
         marker.points.append(sixth_line_point) 
+
+        markers = rviz_tools.RvizMarkers('/base_link', 'visualization_marker')
+        point1 = Point(lane3startx,lane3starty,0) 
+        point2 = Point(lane1endx,lane1endy,0) 
+    
+        markers.publishRectangle(point1, point2, 'black', 5.0)
 
         self.pub_line_min_dist2.publish(marker2)
         self.pub_line_min_dist.publish(marker)
