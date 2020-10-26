@@ -296,11 +296,16 @@ def get_xyz_points(cloud_array, remove_nans=True, dtype=np.float):
 
     return points
 
-def extract_points(points, voxel_size = 0.01, x_range= (-30, 30), y_range= (-20, 20), z_range= (-5, 5), i_range= (0.5, 0.9)):
+def extract_points(points, voxel_size = 0.01, x_range= (-5, 5), y_range= (-2.2, 6), z_range= (-5, -1.2), i_range= (2, 8)):
 
     x, y, z, i = points[:, 0], points[:, 1], points[:, 2], points[:, 3]
+    i = i*255
 
-    
+    mean = i.mean()
+    std = i.std()
+
+    i_range = (mean + i_range[0] * std, mean + i_range[1]* std)
+
     in_range = box_in_range(x,y,z,i, x_range, y_range, z_range, i_range)
 
     points = points[in_range]
