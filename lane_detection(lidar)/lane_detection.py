@@ -33,13 +33,14 @@ from geometry_msgs.msg import Quaternion
 from geometry_msgs.msg import Point
 from std_msgs.msg import ColorRGBA
 
+import math
 
 pc_stack = np.empty((0, 3), float)
 Lane_markers_array = MarkerArray()
 Plane_markers_array = MarkerArray()
-frame_stack = 10
+frame_stack = 30
 id_global = 0
-weight_past = 0 
+atan_theta_past = 0 
 
 
 class lane_detection_class:
@@ -61,22 +62,25 @@ class lane_detection_class:
         pc_np = get_xyzi_points(pointcloud2_to_array(PointCloud2))
         xyz_points = pc_np[:,:3]
         intensity = pc_np[:,3]
-
+        
         # road_pts = extract_points(pc_np, voxel_size = 0.05, x_range= (-10, 10), y_range= (-10, 15), z_range= (-5, -1.2), i_range= (0.45, 0.9))
-        road_pts = extract_points(pc_np, voxel_size = 0.01, x_range= (-5, 5), y_range= (-2.2, 6), z_range= (-5, -1.2),i_range=(2,8))
+        road_pts = extract_points(pc_np)
         # pc_stack = np.append(pc_stack, road_pts, axis=0)
-
         odom_mat = get_odom(self.tf,"velo_link", "map")
         
         if odom_mat is not None:
             # points = get_transformation(odom_mat,xyz_points)
             points = get_transformation(odom_mat,road_pts)
+            
+
             pc_stack = np.append(pc_stack, points, axis=0)
+            # print("save : ", PointCloud2.header.seq)
 
         # if PointCloud2.header.seq == 389: 
         #     save_ply(pc_stack,"save.ply")
 
         if (PointCloud2.header.seq > 0) and (PointCloud2.header.seq % frame_stack == 0): 
+            print("pub : ", PointCloud2.header.seq)
             
             pc_stack[...,2] = 0
             X = StandardScaler().fit_transform(pc_stack)
@@ -104,8 +108,19 @@ class lane_detection_class:
 
             lane1x = sys.maxsize
             lane1y = sys.maxsize
+            
+            lane1x_mate = 0
+            lane1y_mate = 0
+
             lane2x = -sys.maxsize - 1
             lane2y = -sys.maxsize - 1
+
+            lane2x_mate = 0
+            lane2y_mate = 0
+
+            atan_theta = 0
+            len_line = 0
+
             for cluster in range(n_clusters_):
                 sub_cluster_df = pc_stack[labels == cluster]
           
@@ -121,61 +136,85 @@ class lane_detection_class:
 
                 if line_X.min() < lane1x:
                     lane1x = line_X.min()
+                    lane1x_mate = line_X.max()
+                    lane1y_mate = line_y_ransac.max()
+
                 if line_y_ransac.min() < lane1y:
                     lane1y = line_y_ransac.min()
+                    lane1x_mate = line_X.max()
+                    lane1y_mate = line_y_ransac.max()
 
                 if line_X.max() > lane2x:
                     lane2x = line_X.max()
+                    lane2x_mate = line_X.min()
+                    lane2y_mate = line_y_ransac.min()
+
                 if line_y_ransac.max() > lane2y:
                     lane2y = line_y_ransac.max()
-
-                weight = (line_y_ransac.max()- line_y_ransac.min()) / (line_X.max()-line_X.min())
-
-                # print(weight)
-                if weight < 0.3:
-                    Lane_marker = Marker(type=Marker.LINE_STRIP, 
-                                            header = PointCloud2.header,
-                                            action = Marker.ADD,
-                                            id = id_global,
-                                            scale = Vector3(0.5, 0.5, 0.5),
-                                            color = ColorRGBA(1.0, 1.0, 1.0, 1.0),
-                                            pose= Pose(Point(0,0,0), Quaternion(0, 0, 0, 1)),
-                                            lifetime=rospy.Duration(300))
-                    id_global +=1
-
-                    Lane_marker.header.frame_id = "/map"
-
-
-                    for i, j in zip(line_X,line_y_ransac):
-                        l_points = Point()
-                        l_points.x = i
-                        l_points.y = j
-                        l_points.z = 0.0
-                        Lane_marker.points.append(l_points)
-
-                    Lane_markers_array.markers.append(Lane_marker)
+                    lane2x_mate = line_X.min()
+                    lane2y_mate = line_y_ransac.min()
                     
-                    rect_point1 = Point(lane1x,lane1y,0) 
-                    rect_point2 = Point(lane2x,lane2y,0) 
 
-                    Plane_marker = Marker(type=Marker.CUBE, 
-                                            header = PointCloud2.header,
-                                            action = Marker.ADD,
-                                            id = id_global,
-                                            scale = Vector3(np.fabs(rect_point1.x - rect_point2.x),
-                                                            np.fabs(rect_point1.y - rect_point2.y), 
-                                                            np.fabs(rect_point1.z - rect_point2.z)),
-                                            color = ColorRGBA(0.0, 0.0, 0.0, 1.0),
-                                            pose= Pose(Point((rect_point1.x - rect_point2.x) / 2.0 + rect_point2.x,
-                                                             (rect_point1.y - rect_point2.y) / 2.0 + rect_point2.y,
-                                                             (rect_point1.z - rect_point2.z) / 2.0 + rect_point2.z), 
-                                                             Quaternion(0, 0, 0, 1)),
-                                            lifetime=rospy.Duration(300))
+                if len_line < (line_X.max()-line_X.min()):
+                    atan_theta = math.atan((line_y_ransac.max()- line_y_ransac.min()) / (line_X.max()-line_X.min()))
+                    len_line = line_X.max()-line_X.min()
+
+                print(line_X.max()-line_X.min())
+
+                # if atan_theta < 0.3:
+                Lane_marker = Marker(type=Marker.LINE_STRIP, 
+                                        header = PointCloud2.header,
+                                        action = Marker.ADD,
+                                        id = id_global,
+                                        scale = Vector3(0.5, 0.5, 0.5),
+                                        color = ColorRGBA(1.0, 1.0, 1.0, 1.0),
+                                        pose= Pose(Point(0,0,0), Quaternion(0, 0, 0, 1)),
+                                        lifetime=rospy.Duration(300))
+                id_global +=1
+
+                Lane_marker.header.frame_id = "/map"
+
+
+                for i, j in zip(line_X,line_y_ransac):
+                    l_points = Point()
+                    l_points.x = i
+                    l_points.y = j
+                    l_points.z = 0.0
+                    Lane_marker.points.append(l_points)
+
+                Lane_markers_array.markers.append(Lane_marker)
+
+                atan_theta_past = atan_theta
+
+            print("atan_theta: ",atan_theta,"len_line: ", len_line)
+            rect_point1 = Point(lane1x,lane1y,0) 
+            rect_point2 = Point(lane2x,lane2y,0) 
+            rect_point3 = Point(lane1x_mate,lane1y_mate,0)
+            rect_point4 = Point(lane2x_mate,lane2y_mate,0)
+
+            print("rect_point1: ",lane1x, lane1y)
+            print("rect_point2: ",lane2x, lane2y)
+            quaternion = tf2.transformations.quaternion_from_euler(0,0,atan_theta)
+
+            Plane_marker = Marker(type=Marker.CUBE, 
+                                    header = PointCloud2.header,
+                                    action = Marker.ADD,
+                                    id = id_global,
+                                    scale = Vector3(np.fabs(rect_point1.x - rect_point2.x),
+                                                    np.fabs(rect_point1.y - rect_point2.y), 
+                                                    np.fabs(rect_point1.z - rect_point2.z)),
+                                    color = ColorRGBA(0.0, 0.0, 0.0, 1.0),
+                                    pose= Pose(Point((rect_point1.x - rect_point2.x) / 2.0 + rect_point2.x,
+                                                        (rect_point1.y - rect_point2.y) / 2.0 + rect_point2.y,
+                                                        (rect_point1.z - rect_point2.z) / 2.0 + rect_point2.z), 
+                                                        Quaternion(quaternion[0], quaternion[1], quaternion[2], quaternion[3])),
+                                    lifetime=rospy.Duration(300))
+                
+                # quaternion = tf.transformations.quaternion_from_euler(, pitch, yaw)
+
+            Plane_marker.header.frame_id = "/map"
+            Plane_markers_array.markers.append(Plane_marker)
                     
-                    Plane_marker.header.frame_id = "/map"
-                    Plane_markers_array.markers.append(Plane_marker)
-                    
-                weight_past = weight
 
             PointCloud2.header.frame_id = "/map"
             point_pc2 = xyzarray_to_pc2(pc_stack, PointCloud2)
@@ -197,4 +236,3 @@ def main(args):
 
 if __name__ == '__main__':
     main(sys.argv)
-
