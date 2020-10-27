@@ -296,7 +296,7 @@ def get_xyz_points(cloud_array, remove_nans=True, dtype=np.float):
 
     return points
 
-def extract_points(points, voxel_size = 0.01, x_range= (-5, 5), y_range= (-2.2, 6), z_range= (-5, -1.2), i_range= (2, 8)):
+def extract_points(points, voxel_size = 0.01, x_range= (-5, 5), y_range= (-2.2, 5.8), z_range= (-5, -1.2), i_range= (2, 8)):
 
     x, y, z, i = points[:, 0], points[:, 1], points[:, 2], points[:, 3]
     i = i*255
