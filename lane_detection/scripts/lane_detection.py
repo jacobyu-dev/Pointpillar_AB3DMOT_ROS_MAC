@@ -35,7 +35,7 @@ from std_msgs.msg import ColorRGBA
 
 import math
 
-import pandas as pd
+# import pandas as pd
 
 pc_stack = np.empty((0, 3), float)
 Lane_markers_array = MarkerArray()
@@ -77,13 +77,13 @@ class lane_detection_class:
         #     save_ply(pc_stack,"save.ply")
 
         if (PointCloud2.header.seq > 0) and (PointCloud2.header.seq % frame_stack == 0): 
-            print("pub : ", PointCloud2.header.seq)
-            
+            # print("pub : ", PointCloud2.header.seq)
+            height = pc_stack[...,2].mean()-0.5
             pc_stack[...,2] = 0
             
-            if PointCloud2.header.seq == 180:
-                df = pd.DataFrame(pc_stack)
-                df.to_csv('sample.csv', index = False)
+            # if PointCloud2.header.seq == 180:
+            #     df = pd.DataFrame(pc_stack)
+            #     df.to_csv('sample.csv', index = False)
 
             X = StandardScaler().fit_transform(pc_stack)
 
@@ -141,31 +141,44 @@ class lane_detection_class:
                     line_theta = math.atan((line_y_ransac.max()- line_y_ransac.min()) / (line_X.max()-line_X.min()))
                     len_line = line_X.max()-line_X.min()
 
-                print("line theta: ", line_theta)
-
+                # print("line theta: ", line_theta)
+                quaternion = tf2.transformations.quaternion_from_euler(0,np.pi/2,line_theta)
                 # if line_theta < 0.3 and line_theta >0.05:
-                Lane_marker = Marker(type=Marker.LINE_STRIP, 
-                                        header = PointCloud2.header,
-                                        action = Marker.ADD,
-                                        id = id_global,
-                                        scale = Vector3(0.5, 0.5, 0),
-                                        color = ColorRGBA(1.0, 1.0, 1.0, 1.0),
-                                        pose= Pose(Point(0,0,0), Quaternion(0, 0, 0, 1)),
-                                        lifetime=rospy.Duration(300))
+                lane_circle = Marker(type=Marker.CYLINDER,
+                                    id = id_global,
+                                    lifetime=rospy.Duration(300),
+                                    pose=Pose(Point(0.0,0.0,0), Quaternion(quaternion[0], quaternion[1], quaternion[2], quaternion[3])),
+                                    scale=Vector3(0.01, 0.5, line_X.max()-line_X.min()),                           # line width
+                                    header=PointCloud2.header,
+                                    color=ColorRGBA(1.0, 1.0, 1.0, 1.0)
+                                    )
+                # Lane_marker = Marker(type=Marker.LINE_STRIP, 
+                #                         header = PointCloud2.header,
+                #                         action = Marker.ADD,
+                #                         id = id_global,
+                #                         scale = Vector3(1, 1, 0),
+                #                         color = ColorRGBA(1.0, 1.0, 1.0, 1.0),
+                #                         pose= Pose(Point(0,0,0), Quaternion(0, 0, 0, 1)),
+                #                         lifetime=rospy.Duration(300))
 
                 id_global +=1
 
-                Lane_marker.header.frame_id = "/map"
+                lane_circle.header.frame_id = "/map"
 
+                l_points = Point()
+                l_points.x = np.median(line_X)
+                l_points.y = np.median(line_y_ransac)
+                l_points.z = height
 
-                for i, j in zip(line_X,line_y_ransac):
-                    l_points = Point()
-                    l_points.x = i
-                    l_points.y = j
-                    l_points.z = 0.0
-                    Lane_marker.points.append(l_points)
+                # for i, j in zip(line_X,line_y_ransac):
+                #     l_points = Point()
+                #     l_points.x = i
+                #     l_points.y = j
+                #     l_points.z = height
+                #     outer_circle.points.append(l_points)
+                lane_circle.pose.position = l_points
 
-                Lane_markers_array.markers.append(Lane_marker)
+                Lane_markers_array.markers.append(lane_circle)
 
                 line_theta_past = line_theta
 
@@ -173,11 +186,11 @@ class lane_detection_class:
             rect_point2 = Point(lane2x,lane2y,0) 
 
 
-            print("rect_point1: ",lane1x, lane1y)
-            print("rect_point2: ",lane2x, lane2y)
+            # print("rect_point1: ",lane1x, lane1y)
+            # print("rect_point2: ",lane2x, lane2y)
             quaternion = tf2.transformations.quaternion_from_euler(0,0,line_theta)
 
-            print("q : ", quaternion[2])
+            # print("q : ", quaternion[2])
             # if quaternion[2] < 0.13:
             Plane_marker = Marker(type=Marker.CUBE, 
                                 header = PointCloud2.header,
@@ -189,7 +202,7 @@ class lane_detection_class:
                                 color = ColorRGBA(0.0, 0.0, 0.0, 1.0),
                                 pose= Pose(Point((rect_point1.x - rect_point2.x) / 2.0 + rect_point2.x,
                                                     (rect_point1.y - rect_point2.y) / 2.0 + rect_point2.y,
-                                                    -0.5), 
+                                                    height-0.2), 
                                                     Quaternion(quaternion[0], quaternion[1], quaternion[2], quaternion[3])),
                                 lifetime=rospy.Duration(300))
                 
@@ -212,7 +225,7 @@ def main(args):
     rospy.init_node('Lane_detection_node', anonymous=True)
 
     lane_detection = lane_detection_class()
-
+    print("\nLane_detection_node start")
     rospy.spin()
 
 if __name__ == '__main__':

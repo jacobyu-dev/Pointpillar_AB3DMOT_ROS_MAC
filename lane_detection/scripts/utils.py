@@ -6,7 +6,7 @@ import struct
 import ctypes
 import sensor_msgs.point_cloud2 as pc2
 from sensor_msgs.msg import PointCloud2, PointField
-import open3d as o3d
+import open3d
 
 import tf as tf2
 from tf import TransformListener
@@ -310,10 +310,10 @@ def extract_points(points, voxel_size = 0.01, x_range= (-5, 5), y_range= (-2.2, 
 
     points = points[in_range]
 
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(points[:,:3])
+    pcd = open3d.geometry.PointCloud()
+    pcd.points = open3d.utility.Vector3dVector(points[:,:3])
     
-    pcd = pcd.voxel_down_sample(voxel_size)
+    pcd = open3d.voxel_down_sample(pcd, voxel_size)
     pts_3d = np.asarray(pcd.points).astype(np.float32)
 
     return pts_3d
