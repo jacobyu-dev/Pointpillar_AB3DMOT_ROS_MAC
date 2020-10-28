@@ -55,15 +55,16 @@ d_obj = {}
 
 prior_history = []      # Record All Detection Info
 
-MIN_WARNING_DIST = 20     # _m 
-oxtLinear = None
+MIN_WARNING_DIST = 15     # _m 
+# oxtLinear = None
 
  
 class MoDetect_N_Track:
     def __init__(self):
         # Subscriber
         # self.pc_sub = rospy.Subscriber("/kitti/oxts/gps/vel",TwistStamped, self.IMUcallback, queue_size=1)
-        self.imu_sub = rospy.Subscriber("/kitti/oxts/gps/vel",TwistStamped, self.IMUcallback, queue_size=1)
+        # self.imu_sub = rospy.Subscriber("/kitti/oxts/gps/vel",TwistStamped, self.IMUcallback, queue_size=1)
+        self.imu_sub = message_filters.Subscriber("/kitti/oxts/gps/vel",TwistStamped)
         self.det_front_sub = message_filters.Subscriber("/detection/lidar_detector/objects_markers_front",MarkerArray)
         self.det_back_sub = message_filters.Subscriber("/detection/lidar_detector/objects_markers",MarkerArray)
 
@@ -85,78 +86,67 @@ class MoDetect_N_Track:
 
 
         # Publisher & Subscriber Wrapper
-        pub_list = [self.det_front_sub, self.det_back_sub]
+        pub_list = [self.det_front_sub, self.det_back_sub, self.imu_sub]
+        # pub_list = [self.det_front_sub, self.det_back_sub]
         # pub_list = [self.det_front_sub]
 
-        self.ts = message_filters.ApproximateTimeSynchronizer(pub_list, 3, 1, allow_headerless=True)
+        self.ts = message_filters.ApproximateTimeSynchronizer(pub_list, 1, 0.1, allow_headerless=True)
         # self.ts = message_filters.TimeSynchronizer(pub_list, 10)
         # self.ts = message_filters.Cache(self.det_front_sub, 10, allow_headerless=False)
         # self.ts = message_filters.Cache(self.det_back_sub, 10, allow_headerless=False)
         self.ts.registerCallback(self.callback)
-        self.tf2 = TransformListener()
+        self.tf2 = TransformListener()              # for callback function
 
         # Multi-Objects tracking instance
         self.mot_tracker = AB3DMOT() 
 
 
-    def IMUcallback(self, TwistStamped):
-        # header = TwistStamped.header    
-        # header.frame_id = "/velo_link"    
-        # frame = header.seq  
+    # def IMUcallback(self, TwistStamped):
+    #     # 자기 속도 Publishing Logic    
+    #     headerImu = TwistStamped.header     
+    #     headerImu.frame_id="/map"
+
+    #     # odom_mat = get_odom(self.tf2, "velo_link", "map")
+    #     # origin_velo_xyz = np.array([[0.0, 0.0, 0.0]]).reshape(1,-1)
+    #     # origin_points = np.array((0,3), float)
+
+    #     # if odom_mat is not None:
+    #     #     origin_points = get_transformation(odom_mat, origin_velo_xyz)
         
-        # 자기 속도 Publishing Logic    
-        headerImu = TwistStamped.header     
-        headerImu.frame_id='/velo_link'
 
-        global oxtLinear
-        oxtLinear = TwistStamped.twist.linear
-        selfvelo = np.sqrt(oxtLinear.x ** 2 + oxtLinear.y ** 2 + oxtLinear.z ** 2)
-        selfvelo = np.round_(selfvelo,1)    # m/s
-        selfvelo = selfvelo * 3.6           # km/h
+    #     oxtLinear = TwistStamped.twist.linear
+    #     selfvelo = np.sqrt(oxtLinear.x ** 2 + oxtLinear.y ** 2 + oxtLinear.z ** 2)
+    #     selfvelo = np.round_(selfvelo,1)    # m/s
+    #     selfvelo = selfvelo * 3.6           # km/h
         
-        oxtAngular = TwistStamped.twist.angular
-        q = tf.transformations.quaternion_from_euler(oxtAngular.x, oxtAngular.y, oxtAngular.z)
+    #     oxtAngular = TwistStamped.twist.angular
+    #     q = tf.transformations.quaternion_from_euler(oxtAngular.x, oxtAngular.y, oxtAngular.z)
 
-        text_marker = Marker(
-                type=Marker.TEXT_VIEW_FACING,
-                id=0,
-                lifetime=rospy.Duration(0.5),
-                pose=Pose(Point(-7.0, 0.0, 0.0), Quaternion(0, 0, 0, 1)),
-                scale=Vector3(1.5, 1.5, 1.5),
-                header=headerImu,
-                color=ColorRGBA(1.0, 1.0, 1.0, 1.0),
-                text="{}km/h".format(selfvelo))
+    #     text_marker = Marker(
+    #             type=Marker.TEXT_VIEW_FACING,
+    #             id=0,
+    #             lifetime=rospy.Duration(0.5),
+    #             pose=Pose(Point(-7.0, 0.0, 0.0), Quaternion(0, 0, 0, 1)),
+    #             scale=Vector3(1.5, 1.5, 1.5),
+    #             header=headerImu,
+    #             color=ColorRGBA(1.0, 1.0, 1.0, 1.0),
+    #             text="{}km/h".format(selfvelo))
 
-        selfvelo_scale = convert_velo2scale(selfvelo)
-        arrow_marker = Marker(
-                type=Marker.ARROW,
-                id=0,
-                lifetime=rospy.Duration(0.1),
-                pose=Pose(Point(0.0, 0.0, 0.0), Quaternion(*q)),
-                scale=Vector3(selfvelo_scale, 0.5, 0.5),
-                header=headerImu,
-                color=ColorRGBA(1.0, 0.0, 0.0, 0.8))
+    #     selfvelo_scale = convert_velo2scale(selfvelo)
+    #     arrow_marker = Marker(
+    #             type=Marker.ARROW,
+    #             id=0,
+    #             lifetime=rospy.Duration(0.1),
+    #             pose=Pose(Point(0.0, 0.0, 0.0), Quaternion(*q)),
+    #             scale=Vector3(selfvelo_scale, 0.5, 0.5),
+    #             header=headerImu,
+    #             color=ColorRGBA(1.0, 0.0, 0.0, 0.8))
 
-
-        # ego-vehicle 사진 출력
-        ego_car = Marker(
-            type=Marker.MESH_RESOURCE,
-            id=0,
-            lifetime=rospy.Duration(0.5),
-            pose=Pose(Point(0.0, 0.0, -1.6), Quaternion(0,0,0,1)),
-            scale=Vector3(1.5, 1.5, 1.5),
-            header=headerImu,
-            action=Marker.ADD,
-            mesh_resource=CAR_DAE_PATH,
-            color=ColorRGBA(1.0, 1.0, 1.0, 1.0)
-        )
-
-        self.pub_ego_car.publish(ego_car)
-        self.pub_selfvelo_text.publish(text_marker)
+    #     self.pub_selfvelo_text.publish(text_marker)
 
         
 
-    def callback(self, front_MarkerArray, back_MarkerArray):
+    def callback(self, front_MarkerArray, back_MarkerArray, TwistStamped):
         # print("front",len(front_MarkerArray.markers)/4)
         # print("back",len(back_MarkerArray.markers)/4)
         # #  Concat front and back MarkerArray Messages
@@ -243,7 +233,6 @@ class MoDetect_N_Track:
                 obj_label_info = np.append(obj_label_info, [[frame, label]], axis=0)
 
         dets = np.concatenate((obj_label_info, obj_box_info), axis=1)
-
         self.pub_det_markerarray.publish(det_boxes)
 
 
@@ -289,14 +278,11 @@ class MoDetect_N_Track:
             bbox_color = colorCategory20(int(obj_id))
 
             odom_mat = get_odom(self.tf2, "velo_link", "map")
-
             xyz = np.array(b[:3]).reshape(1,-1)
             points = np.array((0,3), float)
 
             if odom_mat is not None:
                 points = get_transformation(odom_mat,xyz)
-                # print(points)
-
 
                 # 이전 x frame 까지 지나온 points들을 저장하여 반환하는 함수
                 # obj_id와 bbox.label은 단지 type차이만 날뿐 같은 데이터
@@ -339,6 +325,11 @@ class MoDetect_N_Track:
 
 
 
+            # GPS sensor values
+            oxtLinear = TwistStamped.twist.linear
+
+
+
             # oxtLinear = TwistStamped.twist.linear
             # Tracker들의 속도 추정
             obj_velo,dx_t,dy_t,dz_t = obj_velocity([tx_trk,ty_trk,tz_trk], bbox.label, oxtLinear)
@@ -354,7 +345,7 @@ class MoDetect_N_Track:
             obj_ori_arrow = Marker(
                 type=Marker.ARROW,
                 id=bbox.label,
-                lifetime=rospy.Duration(0.5),
+                lifetime=rospy.Duration(0.2),
                 pose=Pose(Point(tx_trk, ty_trk, tz_trk/2.0), Quaternion(*q_ori)),      
                 scale=Vector3(obj_velo_scale, 0.5, 0.5),
                 header=header,
@@ -363,12 +354,11 @@ class MoDetect_N_Track:
             obj_ori_arrows.markers.append(obj_ori_arrow)
 
 
-
             obj_velo_marker = Marker(
                 type=Marker.TEXT_VIEW_FACING,
                 id=bbox.label,
                 lifetime=rospy.Duration(0.5),
-                pose=Pose(Point(tx_trk, ty_trk, tz_trk-2.0), Quaternion(0.0, -0.5, 0.0, 0.5)),
+                pose=Pose(Point(tx_trk, ty_trk, tz_trk), Quaternion(0.0, -0.5, 0.0, 0.5)),
                 scale=Vector3(1.5, 1.5, 1.5),
                 header=header,
                 color=ColorRGBA(1.0, 1.0, 1.0, 1.0),
@@ -392,20 +382,21 @@ class MoDetect_N_Track:
             if d < MIN_WARNING_DIST:
                 warning_line.points = Point(tx_trk,ty_trk,tz_trk), Point(0.0, 0.0, 0.0)
                 warning_line_markers.markers.append(warning_line)
-            
-        
+
+
 
             # Change Outer Circle Color
             outer_circle_color = ColorRGBA(1.0*25/255, 1.0, 0.0, 1.0)
             if len(warning_line_markers.markers) > 0 :
                 outer_circle_color = ColorRGBA(1.0*255/255, 1.0*0/255, 1.0*0/255, 1.0)
 
+
             # ego_vehicle's warning boundary
             outer_circle = Marker(
                 type=Marker.CYLINDER,
                 id=int(obj_id),
                 lifetime=rospy.Duration(0.5),
-                pose=Pose(Point(0.0,0.0,-1.0), Quaternion(0, 0, 0, 1)),
+                pose=Pose(Point(0.0,0.0,-2.0), Quaternion(0, 0, 0, 1)),
                 scale=Vector3(8.0, 8.0, 0.1),                           # line width
                 header=header,
                 color=outer_circle_color
@@ -416,24 +407,58 @@ class MoDetect_N_Track:
                 type=Marker.CYLINDER,
                 id=int(obj_id),
                 lifetime=rospy.Duration(0.5),
-                pose=Pose(Point(0.0,0.0,-0.8), Quaternion(0, 0, 0, 1)),
+                pose=Pose(Point(0.0,0.0,-1.8), Quaternion(0, 0, 0, 1)),
                 scale=Vector3(7.0, 7.0, 0.2),                           # line width
                 header=header,
                 color=ColorRGBA(0.22, 0.22, 0.22, 1.0)
-            )    
+            )
+
+
+
+        # ego-vehicle velocity
+        selfvelo = np.sqrt(oxtLinear.x ** 2 + oxtLinear.y ** 2 + oxtLinear.z ** 2)
+        selfvelo = np.round_(selfvelo,1)    # m/s
+        selfvelo = selfvelo * 3.6           # km/h
+        oxtAngular = TwistStamped.twist.angular
+        q_gps = tf.transformations.quaternion_from_euler(oxtAngular.x, oxtAngular.y, oxtAngular.z)
+
+
+        # # ego-vehicle 사진 출력
+        ego_car = Marker(
+            type=Marker.MESH_RESOURCE,
+            id=0,
+            lifetime=rospy.Duration(0.5),
+            pose=Pose(Point(0.0, 0.0, -1.8), Quaternion(0,0,0,1)),
+            scale=Vector3(1.5, 1.5, 1.5),
+            header=header,
+            action=Marker.ADD,
+            mesh_resource=CAR_DAE_PATH,
+            color=ColorRGBA(1.0, 1.0, 1.0, 1.0)
+        )
+
+
+        # Self ego Velocity
+        text_marker = Marker(
+            type=Marker.TEXT_VIEW_FACING,
+            id=0,
+            lifetime=rospy.Duration(0.5),
+            pose=Pose(Point(-7.0, 0.0, 0.0), Quaternion(0, 0, 0, 1)),
+            scale=Vector3(1.5, 1.5, 1.5),
+            header=header,
+            color=ColorRGBA(1.0, 1.0, 1.0, 1.0),
+            text="{}km/h".format(selfvelo))  
+
 
         
         for i in prior_trk_xyz.keys():
             if i not in current_id_list:
                 prior_trk_xyz.pop(i)
-        
-        # r = rospy.Rate(50)
-        # r.sleep()
+
 
         self.pub_frame_seq.publish(overlayTxt)
         self.pub_boxes.publish(boxes)
         self.pub_pictograms.publish(texts)
-        # self.pub_selfvelo_text.publish(text_marker)
+        self.pub_selfvelo_text.publish(text_marker)
         # self.pub_selfveloDirection.publish(arrow_marker)
         self.pub_objs_ori.publish(obj_ori_arrows)
         self.pub_objs_velo.publish(velocity_markers)
@@ -441,7 +466,7 @@ class MoDetect_N_Track:
         self.pub_warning_lines.publish(warning_line_markers)
         self.pub_ego_outCircle.publish(outer_circle)
         self.pub_ego_innerCircle.publish(inner_circle)
-        # self.pub_ego_car.publish(ego_car)
+        self.pub_ego_car.publish(ego_car)
 
 
 
@@ -457,7 +482,7 @@ def get_odom(tf2,frame, dest_frame):
         # create a 4x4 matrix
         mat = np.dot(trans_mat, rot_mat)
     except(tf.Exception, tf.ConnectivityException, tf.LookupException):
-        print("miss")
+        print("No odometry Exept")
         return
     return mat
   
@@ -543,7 +568,7 @@ def obj_velocity(trk_xyz_list, trk_id, oxtLinear):
 # Rviz에서 자동으로 색깔을 지정하는 함수를 직접 구현
 def colorCategory20(obj_id):
     c = ColorRGBA()
-    c.a = 0.6
+    c.a = 1.0
 
     if (obj_id % 20)==0:
         c.r = 0.121569
@@ -682,9 +707,9 @@ def main(args):
     #Initializes and cleanup ros node with node name
     rospy.init_node('kf_tracker_node', anonymous=True)
 
-    # detectionBoxes = readXML(TRACKLET_PATH)
-
     pcl_obj = MoDetect_N_Track() 
+
+    print("\nkf_tracker_node start")
 
     # spin() simply keeps python from exiting until this node is stopped
     try:
