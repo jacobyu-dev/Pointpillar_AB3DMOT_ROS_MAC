@@ -1,7 +1,1 @@
-# Project KCSY
-
-
-## 프로젝트 소개
-
-+ 딥러닝 기반의 객체인식 및 SLAM을 통한 지역 경로 추천 소프트웨어 개발
-
+# Lidar End-to-End Information Map
