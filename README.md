@@ -1,3 +1,4 @@
 # Lidar End-to-End Information Map
   
-![image](https://user-images.githubusercontent.com/44723287/98241496-5e316c80-1fae-11eb-8000-5965132f8a5a.png)
+![그림1](https://user-images.githubusercontent.com/68947288/98644536-f72c0300-2373-11eb-9c6c-b26e494477fc.gif)
+![그림2](https://user-images.githubusercontent.com/68947288/98644544-f98e5d00-2373-11eb-9339-fe2f2f1b56ea.gif)
