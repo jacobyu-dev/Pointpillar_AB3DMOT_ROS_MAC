@@ -82,8 +82,11 @@ class AB3DMOT(object):			  # A baseline of 3D multi-object tracking
 		to_del = []
 		ret = []
 		for t, trk in enumerate(trks):
-			pos = self.trackers[t].predict().reshape((-1, 1))
-			trk[:] = [pos[0], pos[1], pos[2], pos[3], pos[4], pos[5], pos[6]]       
+			# FilterPy stores the state as a column vector.  NumPy 2 rejects
+			# assigning its (1,)-shaped elements into a 1-D float row, so keep
+			# the prediction as a flat state vector.
+			pos = self.trackers[t].predict().reshape(-1)
+			trk[:] = pos[:7]
 			if (np.any(np.isnan(pos))): 
 				to_del.append(t)
 		trks = np.ma.compress_rows(np.ma.masked_invalid(trks))   
@@ -123,4 +126,4 @@ class AB3DMOT(object):			  # A baseline of 3D multi-object tracking
 				self.trackers.pop(i)
 		if (len(ret) > 0): 
 			return np.concatenate(ret)			# h,w,l,x,y,z,theta, ID, other info, confidence
-		return np.empty((0, 15))    
+		return np.empty((0, 15))

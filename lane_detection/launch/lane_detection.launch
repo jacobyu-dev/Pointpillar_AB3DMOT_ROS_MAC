@@ -1,5 +1,0 @@
-<launch>
-
-    <node pkg="lane_detection" type="lane_detection.py" name="lane_detection_node" output="screen"/>
-
-</launch>

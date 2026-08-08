@@ -1,0 +1,63 @@
+Panels:
+  - Class: rviz/Displays
+    Name: Displays
+  - Class: rviz/Views
+    Name: Views
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Class: rviz/Grid
+      Enabled: true
+      Name: Grid
+      Plane: XY
+      Reference Frame: velo_link
+      Cell Size: 1
+      Plane Cell Count: 80
+    - Class: rviz/PointCloud2
+      Enabled: true
+      Name: KITTI LiDAR
+      Topic: /kitti/velo/pointcloud
+      Style: Points
+      Size (Pixels): 2
+      Color Transformer: Intensity
+      Queue Size: 1
+    - Class: rviz/MarkerArray
+      Enabled: true
+      Name: Tracked boxes
+      Marker Topic: /kitti_box_track_markers
+      Queue Size: 1
+    - Class: rviz/MarkerArray
+      Enabled: true
+      Name: Track labels
+      Marker Topic: /kitti_box_label_markers_track
+      Queue Size: 1
+    - Class: rviz/MarkerArray
+      Enabled: true
+      Name: Orientation
+      Marker Topic: /kitti_objs_ori_track
+      Queue Size: 1
+    - Class: rviz/MarkerArray
+      Enabled: true
+      Name: Object paths
+      Marker Topic: /kitti_objs_path_track
+      Queue Size: 1
+    - Class: rviz/MarkerArray
+      Enabled: true
+      Name: Object velocity
+      Marker Topic: /kitti_objs_velo_track
+      Queue Size: 1
+  Enabled: true
+  Global Options:
+    Fixed Frame: velo_link
+    Frame Rate: 30
+  Name: root
+  Views:
+    Current:
+      Class: rviz/Orbit
+      Distance: 35
+      Focal Point:
+        X: 15
+        Y: 0
+        Z: 0
+      Pitch: 0.7
+      Yaw: 0.8

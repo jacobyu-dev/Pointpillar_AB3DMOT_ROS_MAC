@@ -1,0 +1,14 @@
+<launch>
+  <arg name="tracklet_path" />
+  <arg name="start_rviz" default="true" />
+
+  <node pkg="mot_kf_tracking" type="mot_ab3dmot_track_node.py"
+        name="mot_ab3dmot_track_node" output="screen">
+    <param name="tracklet_path" value="$(arg tracklet_path)" />
+  </node>
+
+  <group if="$(arg start_rviz)">
+    <node pkg="rviz" type="rviz" name="mot_kf_tracking_rviz"
+          args="-d $(find mot_kf_tracking)/config/tracklet_tracking.rviz" />
+  </group>
+</launch>

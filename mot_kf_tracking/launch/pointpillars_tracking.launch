@@ -1,0 +1,18 @@
+<launch>
+  <!-- Launch PointPillars separately, then subscribe to its one output topic. -->
+  <arg name="pointpillars_topic" default="/detection/lidar_detector/boxes" />
+  <arg name="start_rviz" default="true" />
+  <arg name="tracks_csv" default="" />
+
+  <node pkg="mot_kf_tracking" type="mot_ab3dmot_track_node.py"
+        name="mot_ab3dmot_pointpillars_track_node" output="screen">
+    <param name="detection_source" value="pointpillars" />
+    <param name="pointpillars_topic" value="$(arg pointpillars_topic)" />
+    <param name="tracks_csv" value="$(arg tracks_csv)" />
+  </node>
+
+  <group if="$(arg start_rviz)">
+    <node pkg="rviz" type="rviz" name="mot_kf_tracking_pointpillars_rviz"
+          args="-d $(find mot_kf_tracking)/config/tracklet_tracking.rviz" />
+  </group>
+</launch>

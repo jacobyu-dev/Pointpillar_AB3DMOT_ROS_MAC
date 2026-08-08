@@ -1,0 +1,14 @@
+{
+  "name": "baseline",
+  "tracker": "AB3DMOT",
+  "max_age": 3,
+  "min_hits": 2,
+  "association": "Hungarian assignment over oriented 3D IoU",
+  "association_iou_threshold": 0.01,
+  "evaluation_iou_threshold": 0.5,
+  "evaluation_metrics": ["oriented_3d_iou", "oriented_bev_iou"],
+  "frame_key": "KITTI LiDAR PointCloud2.header.seq",
+  "tracker_state_order": ["x", "y", "z", "yaw", "l", "w", "h"],
+  "tracker_boundary_order": ["h", "w", "l", "x", "y", "z", "yaw"],
+  "evaluation_coordinate_convention": "legacy_tracker_rviz_velodyne"
+}

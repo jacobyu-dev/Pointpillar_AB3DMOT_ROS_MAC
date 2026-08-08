@@ -1,2 +1,0 @@
-pcl_ld
--DCATKIN_DEVEL_PREFIX=/home/mds/catkin_ws/devel -DCMAKE_INSTALL_PREFIX=/home/mds/catkin_ws/install -G Unix Makefiles

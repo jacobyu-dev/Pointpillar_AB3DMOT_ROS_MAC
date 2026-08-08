@@ -1,6 +1,8 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+import os
 import sys
+import csv
 import rospy
 import numpy as np
 import tf
@@ -22,14 +24,24 @@ from tf import transformations # rotation_matrix(), concatenate_matrices()
 
 from jsk_recognition_msgs.msg import BoundingBox        #sudo apt-get install ros-melodic-jsk-recognition-msgs
 from jsk_recognition_msgs.msg import BoundingBoxArray
-from jsk_rviz_plugins.msg import Pictogram              #sudo apt-get install ros-melodic-jsk-rviz-plugins
-from jsk_rviz_plugins.msg import PictogramArray
-from jsk_rviz_plugins.msg import OverlayText 
+try:
+    from jsk_rviz_plugins.msg import Pictogram
+    from jsk_rviz_plugins.msg import PictogramArray
+    from jsk_rviz_plugins.msg import OverlayText
+    HAS_JSK_RVIZ_PLUGINS = True
+except ImportError:
+    # RoboStack does not provide jsk_rviz_plugins for macOS/Apple Silicon.
+    # Standard RViz MarkerArray outputs remain available.
+    HAS_JSK_RVIZ_PLUGINS = False
 
 from visualization_msgs.msg import Marker, MarkerArray
+# catkin_install_python runs this script through a wrapper in devel/lib.  Keep
+# the sibling tracker modules importable from the actual source directory.
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+if SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, SCRIPT_DIR)
 from model import AB3DMOT
 import std_msgs
-import os.path 
 
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -39,8 +51,17 @@ import message_filters
 
 import pandas as pd
 
-TRACKLET_PATH = '/home/jk/data/2011_09_26/2011_09_26_drive_0032_sync/tracklet_labels.xml'
-CAR_DAE_PATH = 'file:///home/jk/catkin_ws/src/mot_kf_tracking/dae/car.dae'
+# Resolve resources from the repository root so the node works from any clone
+# location rather than depending on one developer's absolute path.
+PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, '..', '..'))
+TRACKLET_PATH = os.path.join(
+    PROJECT_ROOT, 'data', '2011_09_26', '2011_09_26_drive_0032_sync',
+    'tracklet_labels.xml')
+# Use an absolute local resource so RViz does not need the broken macOS
+# RoboStack `rospack` binary to resolve package:// resources.
+CAR_DAE_PATH = 'file://' + os.path.abspath(
+    os.path.join(SCRIPT_DIR, '..', 'dae', 'car.dae')
+)
 
 
 #Global Variables
@@ -62,14 +83,32 @@ df_35 = pd.DataFrame(columns=['frame', 'obj_id', 'tx', 'ty', 'tz', 'dx_t', 'dy_t
 
 class MoDetect_N_Track:
     def __init__(self):
+        # ``tracklet`` keeps the original ground-truth-detection baseline.
+        # ``pointpillars`` consumes the output of exactly one PointPillars node;
+        # it never parses tracklet XML for detections.
+        self.detection_source = rospy.get_param('~detection_source', 'tracklet').lower()
+        if self.detection_source not in ('tracklet', 'pointpillars'):
+            raise ValueError("~detection_source must be 'tracklet' or 'pointpillars'")
+
         # Subscriber
-        self.pc_sub = message_filters.Subscriber("/kitti/velo/pointcloud",PointCloud2)
+        if self.detection_source == 'tracklet':
+            self.detection_sub = message_filters.Subscriber("/kitti/velo/pointcloud", PointCloud2)
+        else:
+            pointpillars_topic = rospy.get_param(
+                '~pointpillars_topic', '/detection/lidar_detector/boxes')
+            self.detection_sub = message_filters.Subscriber(pointpillars_topic, BoundingBoxArray)
+            rospy.loginfo('Tracking PointPillars detections from %s', pointpillars_topic)
         self.imu_sub = message_filters.Subscriber("/kitti/oxts/gps/vel",TwistStamped)
 
         # Publisher
-        self.pub_frame_seq = rospy.Publisher('kitti_frame_seq', OverlayText, queue_size=1)
+        self.pub_frame_seq = None
         self.pub_boxes = rospy.Publisher('kitti_box_track', BoundingBoxArray, queue_size=1)
-        self.pub_pictograms = rospy.Publisher('kitti_box_pictogram_track', PictogramArray, queue_size=1)
+        self.pub_pictograms = None
+        self.pub_box_markers = rospy.Publisher('kitti_box_track_markers', MarkerArray, queue_size=1)
+        self.pub_label_markers = rospy.Publisher('kitti_box_label_markers_track', MarkerArray, queue_size=1)
+        if HAS_JSK_RVIZ_PLUGINS:
+            self.pub_frame_seq = rospy.Publisher('kitti_frame_seq', OverlayText, queue_size=1)
+            self.pub_pictograms = rospy.Publisher('kitti_box_pictogram_track', PictogramArray, queue_size=1)
         self.pub_selfvelo_text = rospy.Publisher('kitti_selfvelo_text_track', Marker, queue_size=1)
         self.pub_selfveloDirection = rospy.Publisher('kitti_selfvelo_direction_track', Marker, queue_size=1)
         self.pub_objs_ori = rospy.Publisher('kitti_objs_ori_track', MarkerArray, queue_size=3)
@@ -83,17 +122,39 @@ class MoDetect_N_Track:
 
 
         # Publisher & Subscriber Wrapper
-        pub_list = [self.pc_sub ,self.imu_sub]
-        self.ts = message_filters.ApproximateTimeSynchronizer(pub_list, 3, 0.1, allow_headerless=True)
+        # PointPillars inference finishes after the point cloud was received.
+        # With the old three-message queue, the matching velocity sample was
+        # usually discarded before the detector published its box array, so
+        # the tracking callback never ran.  Keep a sufficiently long history
+        # of velocity messages and match by the original ROS timestamps.
+        sync_queue_size = rospy.get_param('~sync_queue_size', 400)
+        sync_slop = rospy.get_param('~sync_slop', 0.1)
+        pub_list = [self.detection_sub, self.imu_sub]
+        self.ts = message_filters.ApproximateTimeSynchronizer(
+            pub_list, sync_queue_size, sync_slop, allow_headerless=True)
+        rospy.loginfo('Detection/velocity sync: queue=%d, slop=%.3fs',
+                      sync_queue_size, sync_slop)
         self.ts.registerCallback(self.callback)
 
         # Multi-Objects tracking instance
         self.mot_tracker = AB3DMOT() 
+        self.track_csv_file = None
+        self.track_csv_writer = None
+        tracks_csv_path = rospy.get_param('~tracks_csv', '')
+        if tracks_csv_path:
+            tracks_csv_path = os.path.abspath(os.path.expanduser(tracks_csv_path))
+            os.makedirs(os.path.dirname(tracks_csv_path), exist_ok=True)
+            self.track_csv_file = open(tracks_csv_path, 'w', newline='')
+            self.track_csv_writer = csv.DictWriter(self.track_csv_file, fieldnames=(
+                'frame_idx', 'track_id', 'class_name', 'x', 'y', 'z', 'h', 'w', 'l', 'yaw'))
+            self.track_csv_writer.writeheader()
+            rospy.on_shutdown(self.track_csv_file.close)
+            rospy.loginfo('Writing active AB3DMOT tracks to %s', tracks_csv_path)
 
 
 
-    def callback(self, PointCloud2, TwistStamped):
-        header = PointCloud2.header     
+    def callback(self, detection_msg, TwistStamped):
+        header = detection_msg.header
         frame = header.seq
         del current_id_list[:]
 
@@ -104,25 +165,29 @@ class MoDetect_N_Track:
             prior_path_xyz.clear()
 
 
-        # frame을 rviz에 출력
-        overlayTxt = OverlayText()
-        overlayTxt.left = 10
-        overlayTxt.top = 10
-        overlayTxt.width = 1200
-        overlayTxt.height = 1200
-        overlayTxt.fg_color.a = 1.0
-        overlayTxt.fg_color.r = 1.0
-        overlayTxt.fg_color.g = 1.0
-        overlayTxt.fg_color.b = 1.0
-        overlayTxt.text_size = 12
-        overlayTxt.text = "Frame_seq : {}".format(frame)
+        # frame overlay is optional because jsk_rviz_plugins is not built for macOS.
+        overlayTxt = None
+        if HAS_JSK_RVIZ_PLUGINS:
+            overlayTxt = OverlayText()
+            overlayTxt.left = 10
+            overlayTxt.top = 10
+            overlayTxt.width = 1200
+            overlayTxt.height = 1200
+            overlayTxt.fg_color.a = 1.0
+            overlayTxt.fg_color.r = 1.0
+            overlayTxt.fg_color.g = 1.0
+            overlayTxt.fg_color.b = 1.0
+            overlayTxt.text_size = 12
+            overlayTxt.text = "Frame_seq : {}".format(frame)
 
 
         boxes = BoundingBoxArray() #3D Boxes with JSK
         boxes.header = header     
 
-        texts = PictogramArray() #Labels with JSK
-        texts.header = header
+        texts = None
+        if HAS_JSK_RVIZ_PLUGINS:
+            texts = PictogramArray() #Labels with JSK
+            texts.header = header
 
         obj_ori_arrows = MarkerArray() #arrow with visualization_msgs 
 
@@ -131,6 +196,8 @@ class MoDetect_N_Track:
         obj_path_markers = MarkerArray() # passed path
 
         warning_line_markers = MarkerArray()
+        box_markers = MarkerArray()
+        label_markers = MarkerArray()
 
 
 
@@ -153,7 +220,7 @@ class MoDetect_N_Track:
         # headerImu = TwistStamped.header     
         oxtLinear = TwistStamped.twist.linear
         selfvelo = np.sqrt(oxtLinear.x ** 2 + oxtLinear.y ** 2 + oxtLinear.z ** 2)
-        selfvelo = np.round_(selfvelo,1)    # m/s
+        selfvelo = np.round(selfvelo,1)    # m/s
         selfvelo = selfvelo * 3.6           # km/h
         
         oxtAngular = TwistStamped.twist.angular
@@ -181,31 +248,54 @@ class MoDetect_N_Track:
 
 
 
-        # frame의 Detection 정보와 다른 정보 구분 ( frame,type(label),tx,ty,tz,h,w,l,ry )
-        bboxinfo = detectionBoxes[detectionBoxes[:,0]==str(frame),2:9]
-        additional_info = detectionBoxes[detectionBoxes[:,0]==str(frame), 0:2]
+        if self.detection_source == 'tracklet':
+            # Original ground-truth path: preserve its established conversion
+            # and output convention exactly for baseline comparability.
+            raw_bboxinfo = detectionBoxes[detectionBoxes[:,0] == str(frame), 2:9]
+            additional_info = detectionBoxes[detectionBoxes[:,0] == str(frame), 0:2]
+            bboxinfo = raw_bboxinfo[:, [3, 4, 5, 0, 1, 2, 6]].astype(np.float64)
+        else:
+            # PointPillars publishes JSK dimensions as (length, width,
+            # height) and a pose yaw around +Z.  AB3DMOT expects
+            # (height, width, length, x, y, z, yaw).
+            pointpillar_rows = []
+            pointpillar_info = []
+            for object_index, detected_object in enumerate(detection_msg.boxes):
+                q = detected_object.pose.orientation
+                yaw = tf.transformations.euler_from_quaternion((q.x, q.y, q.z, q.w))[2]
+                pointpillar_rows.append([
+                    detected_object.dimensions.z, detected_object.dimensions.y,
+                    detected_object.dimensions.x, detected_object.pose.position.x,
+                    detected_object.pose.position.y, detected_object.pose.position.z, yaw,
+                ])
+                # Version 1.0 emits only cars.  Keep the KITTI spelling used by
+                # the evaluator so its class filter works for both experiments.
+                pointpillar_info.append([str(frame), 'Car'])
+            bboxinfo = np.asarray(pointpillar_rows, dtype=np.float64).reshape((-1, 7))
+            additional_info = np.asarray(pointpillar_info, dtype=object).reshape((-1, 2))
 
-        reorder = [3,4,5,0,1,2,6]           # [tx,ty,tz,h,w,l,ry] -> [h,w,l,tx,ty,tz,theta]
-        reorder_back = [3,4,5,0,1,2,6]      # [h,w,l,tx,ty,tz,theta] -> [tx,ty,tz,h,w,l,ry]
-        reorder2velo = [2,0,1,3,4,5,6]
-
-        bboxinfo = bboxinfo[:,reorder]      # reorder bboxinfo parameter [h,w,l,x,y,z,theta]
-        bboxinfo = bboxinfo.astype(np.float64)
-        dets_all = {'dets': bboxinfo, 'info': additional_info}	
+        dets_all = {'dets': bboxinfo, 'info': additional_info}
 
 
         # ObjectTracking from Detection
         trackers = self.mot_tracker.update(dets_all)        # h,w,l,x,y,z,theta
         trackers_bbox = trackers[:,0:7]
         trackers_info = trackers[:,7:10]                    # id, frame, label
-        trackers_bbox = trackers_bbox[:,reorder_back]       # reorder_back bboxinfo parameter [tx,ty,tz,h,w,l,ry]
-
-        trackers_bbox = trackers_bbox[:,reorder2velo]       # reorder coordinate system cam to velo 
-        trackers_bbox = trackers_bbox.astype(np.float64)
-        trackers_bbox[:,0] = trackers_bbox[:,0] + 1.3
-        trackers_bbox[:,1] = trackers_bbox[:,1]*-1 
-        trackers_bbox[:,2] = trackers_bbox[:,2]*-1
-        trackers_bbox[:,6] = trackers_bbox[:,6]*-1
+        if self.detection_source == 'tracklet':
+            trackers_bbox = trackers_bbox[:, [3, 4, 5, 0, 1, 2, 6]]
+            trackers_bbox = trackers_bbox[:, [2, 0, 1, 3, 4, 5, 6]].astype(np.float64)
+            trackers_bbox[:,0] = trackers_bbox[:,0] + 1.3
+            trackers_bbox[:,1] = trackers_bbox[:,1]*-1
+            trackers_bbox[:,2] = trackers_bbox[:,2]*-1
+            trackers_bbox[:,6] = trackers_bbox[:,6]*-1
+            marker_yaw_offset = np.pi / 2.0
+            marker_z_is_box_bottom = True
+        else:
+            # Native PointPillars/JSK frame: x/y/z is already a box
+            # centre, so do not apply the tracklet camera-to-Velodyne offsets.
+            trackers_bbox = trackers_bbox[:, [3, 4, 5, 0, 1, 2, 6]].astype(np.float64)
+            marker_yaw_offset = 0.0
+            marker_z_is_box_bottom = False
 
 
         # for문을 통해 각 objects들의 정보를 추출하여 사용
@@ -220,6 +310,7 @@ class MoDetect_N_Track:
             size = Vector3(float(b[5]), float(b[4]), float(b[3]) )       
             obj_id = info[0]
             label = info[2]
+            display_z = tz / 2.0 if marker_z_is_box_bottom else tz
 
             # 이전 x frame 까지 지나온 points들을 저장하여 반환하는 함수
             # obj_id와 bbox.label은 단지 type차이만 날뿐 같은 데이터
@@ -243,19 +334,55 @@ class MoDetect_N_Track:
 
 
             # Tracker들의 BoundingBoxArray 설정
-            bbox.pose.position = Point(tx, ty, tz/2.0)
-            q = tf.transformations.quaternion_from_euler(0.0, 0.0, rz + np.pi/2)     # 어쩔 수 없이 끝단에서만 90도 돌림
+            bbox.pose.position = Point(tx, ty, display_z)
+            q = tf.transformations.quaternion_from_euler(0.0, 0.0, rz + marker_yaw_offset)
             bbox.pose.orientation = Quaternion(*q)
             bbox.dimensions = size
             # bbox.value = 0.001
             bbox.label = int(obj_id)
             boxes.boxes.append(bbox)
 
+            # CSV uses precisely the pose sent to RViz: Velodyne x/y, marker
+            # centre z, h/w/l dimensions, and the final marker yaw.
+            if self.track_csv_writer is not None:
+                self.track_csv_writer.writerow({
+                    'frame_idx': frame, 'track_id': int(obj_id), 'class_name': label,
+                    'x': tx, 'y': ty, 'z': display_z,
+                    'h': size.z, 'w': size.y, 'l': size.x, 'yaw': rz + marker_yaw_offset,
+                })
+                self.track_csv_file.flush()
+
+            # Standard RViz replacement for the unavailable JSK BoundingBox display.
+            box_marker = Marker(
+                type=Marker.CUBE,
+                id=int(obj_id),
+                ns='kitti_box_track',
+                lifetime=rospy.Duration(0.1),
+                pose=Pose(Point(tx, ty, display_z), Quaternion(*q)),
+                scale=size,
+                header=header,
+                color=bbox_color)
+            box_marker.color.a = 0.35
+            box_markers.markers.append(box_marker)
+
+            if not HAS_JSK_RVIZ_PLUGINS:
+                label_marker = Marker(
+                    type=Marker.TEXT_VIEW_FACING,
+                    id=int(obj_id),
+                    ns='kitti_box_label_track',
+                    lifetime=rospy.Duration(0.1),
+                    pose=Pose(Point(tx, ty, display_z + size.z / 2.0 + 1.0), Quaternion(0, 0, 0, 1)),
+                    scale=Vector3(0.0, 0.0, 1.0),
+                    header=header,
+                    color=ColorRGBA(1.0, 1.0, 1.0, 1.0),
+                    text='{} {}'.format(label, int(obj_id)))
+                label_markers.markers.append(label_marker)
+
 
             # Tracker들의 속도 추정
             obj_velo,dx_t,dy_t,dz_t = obj_velocity([tx,ty,tz], bbox.label, oxtLinear)
             if obj_velo != None:    
-                obj_velo = np.round_(obj_velo,1)    # m/s
+                obj_velo = np.round(obj_velo,1)    # m/s
                 obj_velo = obj_velo * 3.6           # km/h
 
             obj_velo_scale = convert_velo2scale(obj_velo)
@@ -266,7 +393,7 @@ class MoDetect_N_Track:
                 type=Marker.ARROW,
                 id=bbox.label,
                 lifetime=rospy.Duration(0.1),
-                pose=Pose(Point(tx, ty, tz/2.0), Quaternion(*q)),      
+                pose=Pose(Point(tx, ty, display_z), Quaternion(*q)),
                 scale=Vector3(obj_velo_scale, 0.5, 0.5),
                 header=header,
                 # color=ColorRGBA(0.0, 1.0, 0.0, 0.8))
@@ -275,17 +402,17 @@ class MoDetect_N_Track:
 
 
 
-            # Tracker들의 PictogramArray 설정
-            picto_text = Pictogram()
-            picto_text.header = header
-            picto_text.mode = Pictogram.STRING_MODE
-            picto_text.pose.position = Point(tx, ty, -tz)
-            q = tf.transformations.quaternion_from_euler(0.7, 0.0, -0.7)
-            picto_text.pose.orientation = Quaternion(0.0, -0.5, 0.0, 0.5)
-            picto_text.size = 4
-            picto_text.color = std_msgs.msg.ColorRGBA(1, 1, 1, 1)
-            picto_text.character = label + ' ' + str(bbox.label)
-            texts.pictograms.append(picto_text)
+            if HAS_JSK_RVIZ_PLUGINS:
+                picto_text = Pictogram()
+                picto_text.header = header
+                picto_text.mode = Pictogram.STRING_MODE
+                picto_text.pose.position = Point(tx, ty, -tz)
+                q = tf.transformations.quaternion_from_euler(0.7, 0.0, -0.7)
+                picto_text.pose.orientation = Quaternion(0.0, -0.5, 0.0, 0.5)
+                picto_text.size = 4
+                picto_text.color = std_msgs.msg.ColorRGBA(1, 1, 1, 1)
+                picto_text.character = label + ' ' + str(bbox.label)
+                texts.pictograms.append(picto_text)
 
             
             obj_velo_marker = Marker(
@@ -342,7 +469,7 @@ class MoDetect_N_Track:
         # ego_vehicle's warning boundary
         outer_circle = Marker(
             type=Marker.CYLINDER,
-            id=int(obj_id),
+            id=0,
             lifetime=rospy.Duration(0.5),
             pose=Pose(Point(0.0,0.0,-1.0), Quaternion(0, 0, 0, 1)),
             scale=Vector3(8.0, 8.0, 0.1),                           # line width
@@ -352,7 +479,7 @@ class MoDetect_N_Track:
 
         inner_circle = Marker(
             type=Marker.CYLINDER,
-            id=int(obj_id),
+            id=0,
             lifetime=rospy.Duration(0.5),
             pose=Pose(Point(0.0,0.0,-0.8), Quaternion(0, 0, 0, 1)),
             scale=Vector3(7.0, 7.0, 0.2),                           # line width
@@ -361,13 +488,17 @@ class MoDetect_N_Track:
         )    
 
 
-        for i in prior_trk_xyz.keys():
+        for i in list(prior_trk_xyz.keys()):
             if i not in current_id_list:
                 prior_trk_xyz.pop(i)
 
-        self.pub_frame_seq.publish(overlayTxt)
+        if self.pub_frame_seq is not None:
+            self.pub_frame_seq.publish(overlayTxt)
         self.pub_boxes.publish(boxes)
-        self.pub_pictograms.publish(texts)
+        if self.pub_pictograms is not None:
+            self.pub_pictograms.publish(texts)
+        self.pub_box_markers.publish(box_markers)
+        self.pub_label_markers.publish(label_markers)
         self.pub_selfvelo_text.publish(text_marker)
         self.pub_selfveloDirection.publish(arrow_marker)
         self.pub_objs_ori.publish(obj_ori_arrows)
@@ -396,8 +527,8 @@ def convert_velo2scale(velo):
             scale_len = 0.0
         else:
             scale_len = 15 * velo/100
-    # else:
-    #     scale_len = 0
+    else:
+        scale_len = 0.0
 
     return scale_len
 
@@ -409,7 +540,7 @@ def points_path(tx,ty,tz,trk_id):
     output : 이전 _frame에서의 x,y,z 좌표를 전역변수에 저장하여 리스트로 출력
     전역변수 prior_path_xyz : tracker_boundingbox id를 key로 가지는 Dictionary
     '''
-    if prior_path_xyz.has_key(trk_id):
+    if trk_id in prior_path_xyz:
         prior_path_xyz[trk_id].append(Point(tx,ty,tz))
 
         if len(prior_path_xyz[trk_id]) > 10:
@@ -427,7 +558,7 @@ def obj_velocity(trk_xyz_list, trk_id, oxtLinear):
     obj_velo = None
     dx_t,dy_t,dz_t = None,None,None
     
-    if prior_trk_xyz.has_key(trk_id):
+    if trk_id in prior_trk_xyz:
         # 계산
         tx,ty,tz = trk_xyz_list                  # 현재 좌표
         x,y,z = prior_trk_xyz[trk_id]            # 이전 좌표
@@ -589,7 +720,14 @@ def main(args):
     #Initializes and cleanup ros node with node name
     rospy.init_node('mot_ab3dmot_track_node', anonymous=True)
 
-    detectionBoxes = readXML(TRACKLET_PATH)
+    detection_source = rospy.get_param('~detection_source', 'tracklet').lower()
+    if detection_source == 'tracklet':
+        tracklet_path = rospy.get_param('~tracklet_path', TRACKLET_PATH)
+        detectionBoxes = readXML(tracklet_path)
+        rospy.loginfo('Loaded tracklet ground truth from %s', tracklet_path)
+    elif detection_source != 'pointpillars':
+        rospy.logfatal("~detection_source must be 'tracklet' or 'pointpillars'")
+        return
 
     pcl_obj = MoDetect_N_Track() 
 
@@ -597,7 +735,7 @@ def main(args):
     try:
         rospy.spin()
     except KeyboardInterrupt:
-        print "Shutting down ROS Image feature detector module"
+        print("Shutting down ROS Image feature detector module")
 
     # df_18.to_csv("df_18.csv", index=False)
     # df_34.to_csv("df_34.csv", index=False)

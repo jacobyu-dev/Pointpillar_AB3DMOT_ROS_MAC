@@ -1,0 +1,13 @@
+{
+  "name": "pointpillars",
+  "detector": "lidar_point_pillars",
+  "tracker": "AB3DMOT",
+  "detection_source": "/detection/lidar_detector/boxes",
+  "frame_key": "DetectedObjectArray.header.seq",
+  "association": "Hungarian assignment over oriented 3D IoU",
+  "association_iou_threshold": 0.01,
+  "evaluation_iou_threshold": 0.5,
+  "evaluation_metrics": ["oriented_3d_iou", "oriented_bev_iou"],
+  "class_name": "Car",
+  "rviz_validation_required": true
+}

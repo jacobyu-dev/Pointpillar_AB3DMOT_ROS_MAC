@@ -1,0 +1,52 @@
+# macOS and Python-generated files
+.DS_Store
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Generated ROS/catkin artifacts
+build/
+devel/
+install/
+logs/
+
+# Local KITTI data and generated experiment outputs
+data/
+outputs/
+
+# Local secrets and environment configuration
+.env
+.env.*
+!.env.example
+*.secret
+*.secrets
+*credentials*.json
+*credential*.json
+*secret*.json
+*token*.json
+*service-account*.json
+*client_secret*.json
+
+# Private keys, certificates, and SSH material
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+id_rsa
+id_ecdsa
+id_ed25519
+
+# ROS recordings and sensor captures stored outside data/
+*.bag
+*.db3
+*.pcap
+*.pcapng
+*.pcd
+
+# Local editor and runtime state
+.vscode/
+.idea/
+*.code-workspace
+*.log

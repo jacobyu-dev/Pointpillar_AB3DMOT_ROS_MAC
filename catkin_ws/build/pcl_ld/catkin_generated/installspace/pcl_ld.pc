@@ -1,8 +1,0 @@
-prefix=/home/mds/catkin_ws/install
-
-Name: pcl_ld
-Description: Description of pcl_ld
-Version: 0.0.0
-Cflags: 
-Libs: -L${prefix}/lib 
-Requires: pcl_conversions pcl_ros roscpp sensor_msgs
