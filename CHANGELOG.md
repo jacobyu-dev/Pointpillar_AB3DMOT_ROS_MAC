@@ -38,6 +38,9 @@ and uses the categories **Added**, **Changed**, **Fixed**, and **Removed**.
   KITTI range.
 - Match the legacy PointPillars ROS yaw conversion, aligning detection boxes,
   orientation arrows, and trajectory markers in RViz.
+- Fix evaluation to the Tracklet GT frame range and exclude delayed
+  out-of-sequence predictions, so compared experiments use identical frame
+  counts.
 - Removed the unavailable `autoware_msgs` dependency from the macOS tracking
   path in favor of JSK bounding-box messages.
 

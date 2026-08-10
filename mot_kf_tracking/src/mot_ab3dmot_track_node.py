@@ -87,6 +87,9 @@ class MoDetect_N_Track:
         # ``pointpillars`` consumes the output of exactly one PointPillars node;
         # it never parses tracklet XML for detections.
         self.detection_source = rospy.get_param('~detection_source', 'tracklet').lower()
+        # rospy assigns sequential Header.seq values while publishing. Make
+        # tracking CSV indices 0-based from the first detection automatically.
+        self._source_frame_base = None
         if self.detection_source not in ('tracklet', 'pointpillars'):
             raise ValueError("~detection_source must be 'tracklet' or 'pointpillars'")
 
@@ -136,8 +139,25 @@ class MoDetect_N_Track:
                       sync_queue_size, sync_slop)
         self.ts.registerCallback(self.callback)
 
+        # Use the validated profile for PointPillars, but preserve the legacy
+        # Tracklet.xml baseline defaults when that independent path is used.
+        default_max_age = 2 if self.detection_source == 'pointpillars' else 3
+        default_min_hits = 3 if self.detection_source == 'pointpillars' else 2
+        self.max_age = int(rospy.get_param('~max_age', default_max_age))
+        self.min_hits = int(rospy.get_param('~min_hits', default_min_hits))
+        self.association_iou_threshold = float(
+            rospy.get_param('~association_iou_threshold', 0.01))
+        if self.max_age < 1 or self.min_hits < 1:
+            raise ValueError('~max_age and ~min_hits must be positive integers')
+        if not 0.0 <= self.association_iou_threshold <= 1.0:
+            raise ValueError('~association_iou_threshold must be within [0, 1]')
         # Multi-Objects tracking instance
-        self.mot_tracker = AB3DMOT() 
+        self.mot_tracker = AB3DMOT(
+            max_age=self.max_age,
+            min_hits=self.min_hits,
+            association_iou_threshold=self.association_iou_threshold)
+        rospy.loginfo('AB3DMOT: max_age=%d, min_hits=%d, association 3D IoU gate=%.3f',
+                      self.max_age, self.min_hits, self.association_iou_threshold)
         self.track_csv_file = None
         self.track_csv_writer = None
         tracks_csv_path = rospy.get_param('~tracks_csv', '')
@@ -150,16 +170,37 @@ class MoDetect_N_Track:
             self.track_csv_writer.writeheader()
             rospy.on_shutdown(self.track_csv_file.close)
             rospy.loginfo('Writing active AB3DMOT tracks to %s', tracks_csv_path)
+        self.pipeline_csv_file = None
+        self.pipeline_csv_writer = None
+        pipeline_csv_path = rospy.get_param('~frame_pipeline_csv', '')
+        if pipeline_csv_path:
+            pipeline_csv_path = os.path.abspath(os.path.expanduser(pipeline_csv_path))
+            os.makedirs(os.path.dirname(pipeline_csv_path), exist_ok=True)
+            self.pipeline_csv_file = open(pipeline_csv_path, 'w', newline='')
+            self.pipeline_csv_writer = csv.DictWriter(self.pipeline_csv_file, fieldnames=(
+                'source_frame_idx', 'frame_idx', 'source_frame_base', 'frame_index_mode', 'timestamp', 'detection_source',
+                'num_input_detections',
+                'num_output_tracks'))
+            self.pipeline_csv_writer.writeheader()
+            rospy.on_shutdown(self.pipeline_csv_file.close)
+            rospy.loginfo('Writing AB3DMOT frame pipeline manifest to %s', pipeline_csv_path)
 
 
 
     def callback(self, detection_msg, TwistStamped):
         header = detection_msg.header
-        frame = header.seq
+        source_frame = int(header.seq)
+        if self._source_frame_base is None:
+            self._source_frame_base = source_frame
+            rospy.loginfo('AB3DMOT frame-index base: detection Header.seq=%d -> evaluation frame 0', source_frame)
+        frame = source_frame - self._source_frame_base
         del current_id_list[:]
 
         if frame == 0:
-            self.mot_tracker.__init__()
+            self.mot_tracker.__init__(
+                max_age=self.max_age,
+                min_hits=self.min_hits,
+                association_iou_threshold=self.association_iou_threshold)
             KalmanBoxTracker.count = 0
             prior_trk_xyz.clear()
             prior_path_xyz.clear()
@@ -281,6 +322,16 @@ class MoDetect_N_Track:
         trackers = self.mot_tracker.update(dets_all)        # h,w,l,x,y,z,theta
         trackers_bbox = trackers[:,0:7]
         trackers_info = trackers[:,7:10]                    # id, frame, label
+        if self.pipeline_csv_writer is not None:
+            self.pipeline_csv_writer.writerow({
+                'frame_idx': frame, 'timestamp': header.stamp.to_sec(),
+                'source_frame_idx': source_frame,
+                'source_frame_base': self._source_frame_base,
+                'frame_index_mode': 'first_detection_header_seq_is_zero',
+                'detection_source': self.detection_source,
+                'num_input_detections': len(bboxinfo), 'num_output_tracks': len(trackers_bbox),
+            })
+            self.pipeline_csv_file.flush()
         if self.detection_source == 'tracklet':
             trackers_bbox = trackers_bbox[:, [3, 4, 5, 0, 1, 2, 6]]
             trackers_bbox = trackers_bbox[:, [2, 0, 1, 3, 4, 5, 6]].astype(np.float64)

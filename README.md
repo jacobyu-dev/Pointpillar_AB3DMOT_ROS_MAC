@@ -55,7 +55,11 @@ KITTI tracklet XML at the path used in the commands below.
 
 ## Quick start: PointPillars + AB3DMOT
 
-Open five terminals. Activate `ros_env` in every terminal.
+Open five terminals. Activate `ros_env` in every terminal. The commands below
+use the validated PointPillars tracking profile: score `0.30`, AABB BEV NMS
+`0.20`, `min_hits=3`, `max_age=2`, and association 3D-IoU gate `0.01`.
+Across 0009/0023/0032 this profile improved mean BEV HOTA from `0.4190` to
+`0.5114` and mean IDF1 from `0.5033` to `0.6439`.
 
 ### 1. Start ROS master
 
@@ -71,7 +75,12 @@ conda activate ros_env
 python {프로젝트경로}/pointpillar_object_detection/lidar_point_pillars_onnx_node.py \
   _input_topic:=/kitti/velo/pointcloud \
   _output_topic:=/detection/lidar_detector/boxes \
-  _flip_x:=false
+  _flip_x:=false \
+  _score_threshold:=0.01 \
+  _publish_score_threshold:=0.30 \
+  _nms_overlap_threshold:=0.20 \
+  _detections_csv:={프로젝트경로}/outputs/detections/pointpillars/0032_raw.csv \
+  _frame_pipeline_csv:={프로젝트경로}/outputs/detections/pointpillars/0032_detector_frames.csv
 ```
 
 The detector uses CoreML when available and falls back to ONNX Runtime CPU.
@@ -85,7 +94,11 @@ conda activate ros_env
 python {프로젝트경로}/mot_kf_tracking/src/mot_ab3dmot_track_node.py \
   _detection_source:=pointpillars \
   _pointpillars_topic:=/detection/lidar_detector/boxes \
-  _tracks_csv:={프로젝트경로}/outputs/tracks/pointpillars/0032_tracks.csv
+  _min_hits:=3 \
+  _max_age:=2 \
+  _association_iou_threshold:=0.01 \
+  _tracks_csv:={프로젝트경로}/outputs/tracks/pointpillars/0032_tracks.csv \
+  _frame_pipeline_csv:={프로젝트경로}/outputs/tracks/pointpillars/0032_tracker_frames.csv
 ```
 
 ### 4. Start RViz
@@ -101,12 +114,14 @@ rviz -d {프로젝트경로}/mot_kf_tracking/config/tracklet_tracking.rviz
 conda activate ros_env
 cd {프로젝트경로}
 python scripts/play_bag_python.py data/kitti_2011_09_26_drive_0032_synced.bag \
-  --rate 0.4 --no-wait
+  --rate 0.2 --no-wait
 ```
 
-Use `--rate 0.4` on the Mac mini to avoid detector frame drops. Restart both
-the detector and tracker before replaying a sequence again, so old track state
-is not carried over.
+Use `--rate 0.2` for quantitative capture on the Mac mini. The validated
+0009/0023/0032 runs completed without detector callback loss at this rate.
+Restart both the detector and tracker before replaying a sequence again, so old
+track state is not carried over. `detections_csv` is post-NMS/pre-publish data
+for raw detection analysis; AB3DMOT receives only boxes at score `>= 0.30`.
 
 ## Tracklet.xml baseline
 
@@ -141,7 +156,9 @@ rostopic echo /kitti_box_track
 The evaluator reports TrackEval metrics such as HOTA, DetA, AssA, MOTA,
 MOTP, IDF1, FP, FN, and ID switches for both oriented 3D IoU and yaw-aware
 BEV IoU. These are experiment metrics, not official KITTI Tracking leaderboard
-metrics.
+metrics. The evaluator fixes the sequence timeline to the Tracklet GT frame
+range, so delayed predictions outside that range are excluded and reported in
+`summary.json`.
 
 Evaluate PointPillars tracks:
 
@@ -152,6 +169,8 @@ python scripts/evaluate_kitti_3d_tracking.py \
   --predictions outputs/tracks/pointpillars/0032_tracks.csv \
   --sequence 0032 \
   --experiment pointpillars \
+  --gt-convention pointpillars \
+  --iou-threshold 0.5 \
   --metric both \
   --output-dir outputs/evaluation/pointpillars
 ```
@@ -168,4 +187,7 @@ and `--output-dir` to the Tracklet output locations. See
 - The detector converts the model yaw to the ROS convention used by the
   tracker, so detection boxes, direction arrows, and trajectory markers share
   the same LiDAR frame.
+- PointPillars defaults are the validated tracking profile above. Override
+  parameters only for a newly named experiment directory; keep the Tracklet
+  baseline on its independent legacy defaults.
 - Historical implementation details are recorded in [CHANGELOG.md](CHANGELOG.md).

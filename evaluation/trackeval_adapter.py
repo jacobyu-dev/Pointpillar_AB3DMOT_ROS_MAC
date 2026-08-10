@@ -29,11 +29,11 @@ def _import_trackeval(trackeval_root: str | Path):
 
 
 def build_sequence_data(gt_by_frame: dict[int, list[Box3D]], prediction_by_frame: dict[int, list[Box3D]],
-                        similarity_fn=compute_iou_matrix) -> dict:
-    """Build the exact data contract consumed by TrackEval metric classes."""
-    frames = sorted(set(gt_by_frame) | set(prediction_by_frame))
-    gt_raw_ids = sorted({box.track_id for boxes in gt_by_frame.values() for box in boxes})
-    tracker_raw_ids = sorted({box.track_id for boxes in prediction_by_frame.values() for box in boxes})
+                        similarity_fn=compute_iou_matrix, frame_indices=None) -> dict:
+    """Build the TrackEval contract over an explicit, fixed frame set when given."""
+    frames = sorted(frame_indices) if frame_indices is not None else sorted(set(gt_by_frame) | set(prediction_by_frame))
+    gt_raw_ids = sorted({box.track_id for frame in frames for box in gt_by_frame.get(frame, [])})
+    tracker_raw_ids = sorted({box.track_id for frame in frames for box in prediction_by_frame.get(frame, [])})
     gt_id_map = {track_id: index for index, track_id in enumerate(gt_raw_ids)}
     tracker_id_map = {track_id: index for index, track_id in enumerate(tracker_raw_ids)}
     gt_ids, tracker_ids, similarities = [], [], []

@@ -36,3 +36,14 @@ def test_false_positive_and_localization_error_reduce_metrics():
     shifted_result = evaluate_trackeval(build_sequence_data(gt, shifted), TRACK_EVAL, 0.1)
     assert false_positive_result['FP'] == 1
     assert shifted_result['LocA_3D'] < 1.0
+
+
+def test_fixed_frame_range_excludes_out_of_sequence_prediction():
+    gt = {0: [box(0, 1)], 1: [box(1, 1)]}
+    prediction = {0: [box(0, 10)], 2: [box(2, 99)]}
+    data = build_sequence_data(gt, prediction, frame_indices=range(0, 2))
+    result = evaluate_trackeval(data, TRACK_EVAL, 0.5)
+    assert data['frames'] == [0, 1]
+    assert data['num_timesteps'] == 2
+    assert data['num_tracker_dets'] == 1
+    assert result['FP'] == 0

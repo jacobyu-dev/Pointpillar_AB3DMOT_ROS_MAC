@@ -31,6 +31,11 @@ IoU, so a vertical-box error does not change association. `HOTA`, `DetA`,
 They are not KITTI official leaderboard metrics: the official KITTI Tracking
 protocol evaluates projected 2D camera boxes.
 
+The evaluated timeline is always fixed to the minimum-through-maximum Tracklet
+GT frame range. Predictions outside that range are excluded from metrics and
+listed in `summary.json`, ensuring Tracklet and PointPillars experiments use
+the same number of frames.
+
 ## Baseline export
 
 Keep the existing ROS playback and RViz flow. Start the node with a private
@@ -89,19 +94,34 @@ evaluator compares it against `tracklet_labels.xml`.
 ```bash
 python pointpillar_object_detection/lidar_point_pillars_onnx_node.py \
   _input_topic:=/kitti/velo/pointcloud \
-  _output_topic:=/detection/lidar_detector/boxes
+  _output_topic:=/detection/lidar_detector/boxes \
+  _score_threshold:=0.01 \
+  _publish_score_threshold:=0.30 \
+  _nms_overlap_threshold:=0.20 \
+  _detections_csv:={프로젝트경로}/outputs/detections/pointpillars/0032_raw.csv \
+  _frame_pipeline_csv:={프로젝트경로}/outputs/detections/pointpillars/0032_detector_frames.csv
 
 python mot_kf_tracking/src/mot_ab3dmot_track_node.py \
   _detection_source:=pointpillars \
   _pointpillars_topic:=/detection/lidar_detector/boxes \
-  _tracks_csv:={프로젝트경로}/outputs/tracks/pointpillars/0032_tracks.csv
+  _min_hits:=3 \
+  _max_age:=2 \
+  _association_iou_threshold:=0.01 \
+  _tracks_csv:={프로젝트경로}/outputs/tracks/pointpillars/0032_tracks.csv \
+  _frame_pipeline_csv:={프로젝트경로}/outputs/tracks/pointpillars/0032_tracker_frames.csv
 
 python scripts/evaluate_kitti_3d_tracking.py \
   --tracklets data/2011_09_26/2011_09_26_drive_0032_sync/tracklet_labels.xml \
   --predictions outputs/tracks/pointpillars/0032_tracks.csv \
   --sequence 0032 --experiment pointpillars --class-name Car --iou-threshold 0.5 \
+  --gt-convention pointpillars \
   --output-dir outputs/evaluation/pointpillars/0032 --metric both
 ```
+
+These commands use the validated PointPillars profile: publish score `0.30`,
+NMS `0.20`, `min_hits=3`, `max_age=2`, and association 3D-IoU gate `0.01`.
+Use `--rate 0.2` with `scripts/play_bag_python.py` for complete Mac mini
+capture.
 
 The PointPillars path deliberately does not load `tracklet.xml` as detection
 input. Before treating a score as valid, verify in RViz that PointPillars and

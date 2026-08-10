@@ -49,12 +49,14 @@ def associate_detections_to_trackers(detections, trackers, iou_threshold=0.01):
 	return matches, np.array(unmatched_detections), np.array(unmatched_trackers)
 
 class AB3DMOT(object):			  # A baseline of 3D multi-object tracking
-	def __init__(self, max_age=3, min_hits=2):      # max age will preserve the bbox does not appear no more than 2 frames, interpolate the detection
+	def __init__(self, max_age=3, min_hits=2, association_iou_threshold=0.01):
+		# max_age preserves a box across a short run of missing detections.
 		"""
 		Sets key parameters for SORT                
 		"""
 		self.max_age = max_age
 		self.min_hits = min_hits
+		self.association_iou_threshold = association_iou_threshold
 		self.trackers = []
 		self.frame_count = 0
 		self.reorder = [3, 4, 5, 6, 2, 1, 0]
@@ -98,7 +100,8 @@ class AB3DMOT(object):			  # A baseline of 3D multi-object tracking
 		else: dets_8corner = []
 		trks_8corner = [convert_3dbox_to_8corner(trk_tmp) for trk_tmp in trks]
 		if len(trks_8corner) > 0: trks_8corner = np.stack(trks_8corner, axis=0)
-		matched, unmatched_dets, unmatched_trks = associate_detections_to_trackers(dets_8corner, trks_8corner)
+		matched, unmatched_dets, unmatched_trks = associate_detections_to_trackers(
+			dets_8corner, trks_8corner, self.association_iou_threshold)
 
 		# update matched trackers with assigned detections
 		for t, trk in enumerate(self.trackers):

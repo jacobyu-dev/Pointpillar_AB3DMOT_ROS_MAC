@@ -8,13 +8,14 @@ from evaluation.models import Box3D
 
 
 def build_diagnostics(gt_by_frame: dict[int, list[Box3D]], prediction_by_frame: dict[int, list[Box3D]], threshold: float,
-                      similarity_fn=compute_iou_matrix):
+                      similarity_fn=compute_iou_matrix, frame_indices=None):
     frame_rows, switch_rows = [], []
     track_rows = defaultdict(lambda: {'num_gt_frames': 0, 'num_matched_frames': 0, 'num_missed_frames': 0,
                                       'num_id_switches': 0, 'ious': [], 'tracker_ids': set(),
                                       'class_name': '', 'first_frame': None, 'last_frame': None})
     previous_tracker_for_gt: dict[int, tuple[int, float]] = {}
-    for frame in sorted(set(gt_by_frame) | set(prediction_by_frame)):
+    frames = sorted(frame_indices) if frame_indices is not None else sorted(set(gt_by_frame) | set(prediction_by_frame))
+    for frame in frames:
         gt_boxes, prediction_boxes = gt_by_frame.get(frame, []), prediction_by_frame.get(frame, [])
         matrix = similarity_fn(gt_boxes, prediction_boxes)
         matches, unmatched_gt, unmatched_predictions = match_iou_matrix(matrix, threshold)
