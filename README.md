@@ -184,33 +184,33 @@ python scripts/diagnostics/analyze_pointpillars_pipeline.py \
   --output-dir outputs/analysis/0032/frame_diagnostics
 ```
 
-## Results and implementation contributions
+## 결과 및 구현 기여
 
-| Outcome | My implementation | Evidence / result |
+| 성과 | 구현 내용 | 근거 / 결과 |
 | --- | --- | --- |
-| Lightweight 3D perception pipeline | Integrated PointPillars and Kalman Filter + Hungarian Algorithm-based AB3DMOT through ROS topics, without an additional tracking neural network. | Runs detector, tracker, RViz, and bag playback as separate inspectable nodes. |
-| Detector–tracker alignment | Implemented a box adapter that reconciles 3D box parameter order, axes, signs, offsets, and yaw conventions. | Detection boxes, tracking boxes, orientation arrows, and trajectories share the LiDAR/RViz frame. |
-| Frame-level evaluation alignment | Created and propagated a 0-based `frame_idx` from `PointCloud2.header.seq`, then preserved source/derived frame indices in pipeline manifests. | Detector CSV, tracker CSV, and `tracklet_labels.xml` can be joined frame by frame without an implicit offset. |
-| Track ID continuity improvement | Analyzed ID-loss frames, then ablated score threshold, NMS, `min_hits`, `max_age`, and 3D-IoU association settings across KITTI 0009/0023/0032. | Selected `score=0.30`, `NMS=0.20`, `min_hits=3`, `max_age=2`, `IoU=0.01`; mean BEV HOTA **0.4190 → 0.5114 (+22.1%)**, IDF1 **0.5033 → 0.6439 (+27.9%)**. |
-| Dynamic-object information | Managed active/terminated tracks and visual lifetimes; extended per-frame detections with object ID, velocity, direction, trajectory, and risk-distance information in the map frame. | Eliminates stale visualization state and supports object-centric dynamic-map updates. |
-| Reproducible evaluation | Built CSV exports, frame manifests, and TrackEval-based 3D/BEV evaluation with a fixed GT timeline. | Reports HOTA, MOTA, IDF1, FP/FN, and ID switches under identical frame ranges. |
+| 경량 3D Perception Pipeline | 추가 Tracking Neural Network 없이 ROS topic으로 PointPillars와 Kalman Filter + Hungarian Algorithm 기반 AB3DMOT를 통합했습니다. | Detector, Tracker, RViz, bag playback을 각각 확인 가능한 node로 구성했습니다. |
+| Detector–Tracker 정합 | 3D Box 파라미터 순서, 좌표축, 부호, offset, yaw convention을 맞추는 box adapter를 구현했습니다. | Detection Box, Tracking Box, orientation arrow, trajectory가 LiDAR/RViz frame에서 정합됩니다. |
+| Frame 단위 평가 정합 | `PointCloud2.header.seq`로부터 0-base `frame_idx`를 생성·전파하고, pipeline manifest에 원본/변환 frame index를 함께 기록했습니다. | 별도 offset 없이 Detector CSV, Tracker CSV, `tracklet_labels.xml`을 frame 단위로 결합할 수 있습니다. |
+| Track ID 연속성 개선 | ID loss frame을 분석한 뒤 KITTI 0009/0023/0032에서 score threshold, NMS, `min_hits`, `max_age`, 3D-IoU association 설정을 ablation했습니다. | `score=0.30`, `NMS=0.20`, `min_hits=3`, `max_age=2`, `IoU=0.01`을 도출했고, 평균 BEV HOTA **0.4190 → 0.5114 (+22.1%)**, IDF1 **0.5033 → 0.6439 (+27.9%)**를 달성했습니다. |
+| 동적 객체 정보 | 활성/종료 Track과 visualization lifetime을 관리하고, frame 단위 Detection을 map frame의 객체 ID, 속도, 방향, trajectory, 위험거리 정보로 확장했습니다. | 오래된 visualization state를 제거하고 객체 중심의 dynamic-map update를 지원합니다. |
+| 재현 가능한 평가 | CSV export, frame manifest, 고정 GT timeline 기반 TrackEval 3D/BEV 평가를 구축했습니다. | 동일 frame range에서 HOTA, MOTA, IDF1, FP/FN, ID switch를 산출합니다. |
 
 ## Quick start: PointPillars + AB3DMOT
 
-Open five terminals. Activate `ros_env` in every terminal. The commands below
-use the validated PointPillars tracking profile: score `0.30`, AABB BEV NMS
-`0.20`, `min_hits=3`, `max_age=2`, and association 3D-IoU gate `0.01`.
-Across 0009/0023/0032 this profile improved mean BEV HOTA from `0.4190` to
-`0.5114` and mean IDF1 from `0.5033` to `0.6439`.
+터미널 다섯 개를 열고 각각에서 `ros_env`를 활성화합니다. 아래 명령은
+검증된 PointPillars Tracking Profile인 score `0.30`, AABB BEV NMS `0.20`,
+`min_hits=3`, `max_age=2`, association 3D-IoU gate `0.01`을 사용합니다.
+이 Profile은 0009/0023/0032에서 평균 BEV HOTA를 `0.4190`에서 `0.5114`로,
+평균 IDF1을 `0.5033`에서 `0.6439`로 개선했습니다.
 
-### 1. Start ROS master
+### 1. ROS master 실행
 
 ```zsh
 conda activate ros_env
 roscore
 ```
 
-### 2. Start the PointPillars detector
+### 2. PointPillars Detector 실행
 
 ```zsh
 conda activate ros_env
@@ -225,11 +225,12 @@ python {프로젝트경로}/pointpillar_object_detection/lidar_point_pillars_onn
   _frame_pipeline_csv:={프로젝트경로}/outputs/detections/pointpillars/0032_detector_frames.csv
 ```
 
-The detector uses CoreML when available and falls back to ONNX Runtime CPU.
-The default models are `pointpillar_object_detection/models/pfe.onnx` and
-`pointpillar_object_detection/models/rpn.onnx`.
+Detector는 사용 가능할 경우 CoreML을 우선 사용하고, 사용할 수 없으면 ONNX
+Runtime CPU로 전환합니다. 기본 model은
+`pointpillar_object_detection/models/pfe.onnx`와
+`pointpillar_object_detection/models/rpn.onnx`입니다.
 
-### 3. Start AB3DMOT tracking
+### 3. AB3DMOT Tracking 실행
 
 ```zsh
 conda activate ros_env
@@ -243,14 +244,14 @@ python {프로젝트경로}/mot_kf_tracking/src/mot_ab3dmot_track_node.py \
   _frame_pipeline_csv:={프로젝트경로}/outputs/tracks/pointpillars/0032_tracker_frames.csv
 ```
 
-### 4. Start RViz
+### 4. RViz 실행
 
 ```zsh
 conda activate ros_env
 rviz -d {프로젝트경로}/mot_kf_tracking/config/tracklet_tracking.rviz
 ```
 
-### 5. Replay the bag
+### 5. bag 재생
 
 ```zsh
 conda activate ros_env
@@ -259,16 +260,18 @@ python scripts/play_bag_python.py data/kitti_2011_09_26_drive_0032_synced.bag \
   --rate 0.2 --no-wait
 ```
 
-Use `--rate 0.2` for quantitative capture on the Mac mini. The validated
-0009/0023/0032 runs completed without detector callback loss at this rate.
-Restart both the detector and tracker before replaying a sequence again, so old
-track state is not carried over. `detections_csv` is post-NMS/pre-publish data
-for raw detection analysis; AB3DMOT receives only boxes at score `>= 0.30`.
+Mac mini에서 정량 캡처할 때는 `--rate 0.2`를 사용합니다. 검증한
+0009/0023/0032 실행은 이 속도에서 Detector callback 유실 없이 완료됐습니다.
+같은 sequence를 다시 재생하기 전에는 이전 Track state가 이어지지 않도록
+Detector와 Tracker를 모두 재시작해야 합니다. `detections_csv`는 raw
+Detection 분석용 post-NMS/pre-publish data이며, AB3DMOT는 score `>= 0.30`인
+Box만 입력받습니다.
 
 ## Tracklet.xml baseline
 
-For the baseline, do not start the PointPillars detector. Start `roscore`,
-RViz, and the bag player as above; run the tracker with the XML source instead.
+Baseline에서는 PointPillars Detector를 실행하지 않습니다. 위와 같이
+`roscore`, RViz, bag player를 실행한 후, Tracker의 입력 source로 XML을
+사용합니다.
 
 ```zsh
 conda activate ros_env
@@ -278,31 +281,29 @@ python {프로젝트경로}/mot_kf_tracking/src/mot_ab3dmot_track_node.py \
   _tracks_csv:={프로젝트경로}/outputs/tracks/tracklet/0032_tracks.csv
 ```
 
-## Runtime checks
+## Runtime 확인
 
-Run these while the bag is playing.
+bag을 재생하는 동안 아래 명령으로 topic을 확인합니다.
 
 ```zsh
 rostopic echo /detection/lidar_detector/boxes
 rostopic echo /kitti_box_track
 ```
 
-- `boxes: []` means that particular frame has no detection; it does not by
-  itself indicate a broken topic connection.
-- `/kitti_box_track` is only meaningful while `/clock` is being published by
-  the bag player.
-- The track CSV is flushed as tracks are published to RViz.
+- `boxes: []`는 해당 frame에 Detection이 없다는 뜻이며, topic 연결 실패를
+  의미하지는 않습니다.
+- `/kitti_box_track`은 bag player가 `/clock`을 발행하는 동안에만 유효합니다.
+- Track이 RViz로 발행될 때마다 Track CSV에 기록됩니다.
 
-## 3D and BEV quantitative evaluation
+## 3D 및 BEV 정량평가
 
-The evaluator reports TrackEval metrics such as HOTA, DetA, AssA, MOTA,
-MOTP, IDF1, FP, FN, and ID switches for both oriented 3D IoU and yaw-aware
-BEV IoU. These are experiment metrics, not official KITTI Tracking leaderboard
-metrics. The evaluator fixes the sequence timeline to the Tracklet GT frame
-range, so delayed predictions outside that range are excluded and reported in
-`summary.json`.
+Evaluator는 oriented 3D IoU와 yaw-aware BEV IoU 각각에 대해 HOTA, DetA,
+AssA, MOTA, MOTP, IDF1, FP, FN, ID switch를 산출합니다. 이 지표는 내부
+실험 비교용이며 KITTI Tracking 공식 leaderboard 지표가 아닙니다. Evaluator는
+sequence timeline을 Tracklet GT frame 범위로 고정하므로, 범위 밖의 지연
+prediction은 평가에서 제외하고 `summary.json`에 기록합니다.
 
-Evaluate PointPillars tracks:
+PointPillars Track을 평가합니다.
 
 ```zsh
 cd {프로젝트경로}
@@ -317,19 +318,19 @@ python scripts/evaluate_kitti_3d_tracking.py \
   --output-dir outputs/evaluation/pointpillars
 ```
 
-Evaluate the Tracklet baseline by changing `--predictions`, `--experiment`,
-and `--output-dir` to the Tracklet output locations. See
-[evaluation/README.md](evaluation/README.md) for metric details.
+Tracklet baseline을 평가할 때는 `--predictions`, `--experiment`,
+`--output-dir`을 Tracklet output 경로로 바꿉니다. 지표 상세는
+[evaluation/README.md](evaluation/README.md)를 참고합니다.
 
-## Notes
+## 참고 사항
 
-- The macOS detector currently emits the `Car` class only.
-- KITTI point-cloud reflectance is read from either `i` or `intensity`; values
-  already in `[0, 1]` are not normalized again.
-- The detector converts the model yaw to the ROS convention used by the
-  tracker, so detection boxes, direction arrows, and trajectory markers share
-  the same LiDAR frame.
-- PointPillars defaults are the validated tracking profile above. Override
-  parameters only for a newly named experiment directory; keep the Tracklet
-  baseline on its independent legacy defaults.
-- Historical implementation details are recorded in [CHANGELOG.md](CHANGELOG.md).
+- 현재 macOS Detector는 `Car` class만 발행합니다.
+- KITTI Point Cloud reflectance는 `i` 또는 `intensity` field에서 읽으며,
+  이미 `[0, 1]` 범위인 값은 다시 정규화하지 않습니다.
+- Detector는 model yaw를 Tracker가 사용하는 ROS convention으로 변환하므로,
+  Detection Box, direction arrow, trajectory marker가 동일한 LiDAR frame을
+  사용합니다.
+- PointPillars 기본값은 위의 검증된 Tracking Profile입니다. Parameter를
+  변경할 때는 새 experiment directory를 사용하고, Tracklet baseline에는
+  독립적인 legacy 기본값을 유지합니다.
+- 과거 구현 변경 사항은 [CHANGELOG.md](CHANGELOG.md)에 기록되어 있습니다.
