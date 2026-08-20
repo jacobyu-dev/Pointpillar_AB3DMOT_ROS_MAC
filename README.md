@@ -191,9 +191,30 @@ python scripts/diagnostics/analyze_pointpillars_pipeline.py \
 | 경량 3D Perception Pipeline | 추가 Tracking Neural Network 없이 ROS topic으로 PointPillars와 Kalman Filter + Hungarian Algorithm 기반 AB3DMOT를 통합했습니다. | Detector, Tracker, RViz, bag playback을 각각 확인 가능한 node로 구성했습니다. |
 | Detector–Tracker 정합 | 3D Box 파라미터 순서, 좌표축, 부호, offset, yaw convention을 맞추는 box adapter를 구현했습니다. | Detection Box, Tracking Box, orientation arrow, trajectory가 LiDAR/RViz frame에서 정합됩니다. |
 | Frame 단위 평가 정합 | `PointCloud2.header.seq`로부터 0-base `frame_idx`를 생성·전파하고, pipeline manifest에 원본/변환 frame index를 함께 기록했습니다. | 별도 offset 없이 Detector CSV, Tracker CSV, `tracklet_labels.xml`을 frame 단위로 결합할 수 있습니다. |
-| Track ID 연속성 개선 | ID loss frame을 분석한 뒤 KITTI 0009/0023/0032에서 score threshold, NMS, `min_hits`, `max_age`, 3D-IoU association 설정을 ablation했습니다. | `score=0.30`, `NMS=0.20`, `min_hits=3`, `max_age=2`, `IoU=0.01`을 도출했고, 평균 BEV HOTA **0.4190 → 0.5114 (+22.1%)**, IDF1 **0.5033 → 0.6439 (+27.9%)**를 달성했습니다. |
+| Track ID 연속성 개선 | ID loss frame을 분석한 뒤 KITTI 0009/0023/0032에서 score threshold, NMS, `min_hits`, `max_age`, 3D-IoU association 설정을 ablation했습니다. | `score=0.30`, `NMS=0.20`, `min_hits=3`, `max_age=2`, `IoU=0.01`을 도출했고, 평균 BEV HOTA **0.4190 → 0.5114 (+0.0924)**, IDF1 **0.5033 → 0.6439 (+0.1406)**를 달성했습니다. |
 | 동적 객체 정보 | 활성/종료 Track과 visualization lifetime을 관리하고, frame 단위 Detection을 map frame의 객체 ID, 속도, 방향, trajectory, 위험거리 정보로 확장했습니다. | 오래된 visualization state를 제거하고 객체 중심의 dynamic-map update를 지원합니다. |
 | 재현 가능한 평가 | CSV export, frame manifest, 고정 GT timeline 기반 TrackEval 3D/BEV 평가를 구축했습니다. | 동일 frame range에서 HOTA, MOTA, IDF1, FP/FN, ID switch를 산출합니다. |
+
+### Tracking Ablation 실험 결과
+
+KITTI 0009·0023·0032에서 동일한 GT frame range와 yaw-aware BEV IoU 기준으로
+비교했습니다. ID loss가 발생한 frame을 분석한 뒤, score threshold, AABB BEV
+NMS, `min_hits`, `max_age`, association 3D-IoU gate를 함께 ablation했습니다.
+
+| 지표 | Ablation 전 평균 | Ablation 최종 Profile 평균 | 절대 개선 |
+| --- | ---: | ---: | ---: |
+| BEV HOTA | 0.4190 | **0.5114** | **+0.0924** |
+| BEV IDF1 | 0.5033 | **0.6439** | **+0.1406** |
+
+| Ablation으로 도출한 최종 Parameter | 설정값 |
+| --- | --- |
+| `publish_score_threshold` | `0.30` |
+| AABB BEV NMS | `0.20` |
+| `min_hits` / `max_age` | `3` / `2` |
+| association 3D-IoU gate | `0.01` |
+
+> BEV HOTA와 BEV IDF1은 내부 실험 비교를 위한 yaw-aware BEV IoU 기반 지표이며,
+> KITTI Tracking 공식 leaderboard 점수와는 구분합니다.
 
 ## Quick start: PointPillars + AB3DMOT
 
